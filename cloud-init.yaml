@@ -1,0 +1,231 @@
+#cloud-config
+
+# Update system and install packages
+package_update: true
+package_upgrade: true
+
+packages:
+  - python3
+  - python3-pip
+  - unzip
+  - wget
+  - curl
+  - git
+
+# Install python-oracledb and other Python packages
+runcmd:
+  # Install python-oracledb (modern Oracle driver)
+  - python3 -m pip install --upgrade pip
+  - python3 -m pip install oracledb pandas numpy flask
+  
+  # Create test connection script
+  - |
+    cat > /home/opc/test_connect.py << 'EOF'
+    #!/usr/bin/env python3
+    """
+    Test script for Oracle Autonomous Database connection using python-oracledb
+    """
+    import oracledb
+    import os
+    import sys
+    
+    def test_connection():
+        try:
+            print("🔍 Testing python-oracledb installation...")
+            print(f"   python-oracledb version: {oracledb.__version__}")
+            
+            # Check if wallet directory exists
+            wallet_dir = "/home/opc/wallet"
+            if not os.path.exists(wallet_dir):
+                print("❌ Wallet directory not found. Please upload and extract wallet.zip first:")
+                print("   1. Download wallet from OCI Console")
+                print("   2. scp wallet.zip opc@<instance_ip>:")
+                print("   3. unzip wallet.zip -d wallet/")
+                return False
+            
+            # Check for required wallet files (Thin mode)
+            required_files = ["tnsnames.ora", "ewallet.pem"]
+            missing_files = []
+            for file in required_files:
+                if not os.path.exists(os.path.join(wallet_dir, file)):
+                    missing_files.append(file)
+            
+            if missing_files:
+                print(f"❌ Missing wallet files: {', '.join(missing_files)}")
+                return False
+            
+            print("✅ Wallet files found")
+            print("📝 To test database connection, update this script with:")
+            print("   - Your database admin password")
+            print("   - Appropriate service name (PYTHONADB_high, PYTHONADB_medium, or PYTHONADB_low)")
+            print("")
+            print("Example connection code:")
+            print("""
+    import oracledb
+    
+    connection = oracledb.connect(
+        user="ADMIN",
+        password="your_password_here",
+        dsn="PYTHONADB_high",
+        config_dir="/home/ocp/wallet"
+    )
+    
+    cursor = connection.cursor()
+    cursor.execute("SELECT 'Hello Oracle!' FROM dual")
+    result = cursor.fetchone()
+    print(f"✅ Success: {result[0]}")
+    
+    cursor.close()
+    connection.close()
+            """)
+            
+            return True
+            
+        except ImportError as e:
+            print(f"❌ Failed to import oracledb: {e}")
+            return False
+        except Exception as e:
+            print(f"❌ Unexpected error: {e}")
+            return False
+    
+    if __name__ == "__main__":
+        success = test_connection()
+        sys.exit(0 if success else 1)
+    EOF
+  
+  # Create basic connection example
+  - |
+    cat > /home/ocp/connection_example.py << 'EOF'
+    #!/usr/bin/env python3
+    """
+    Oracle Autonomous Database connection example using python-oracledb
+    
+    Update the connection parameters below with your database details:
+    - password: Your database admin password
+    - dsn: Your service name (PYTHONADB_high, PYTHONADB_medium, or PYTHONADB_low)
+    """
+    import oracledb
+    
+    def connect_to_oracle():
+        try:
+            # Connection parameters - UPDATE THESE
+            connection = oracledb.connect(
+                user="ADMIN",
+                password="your_password_here",  # Replace with your password
+                dsn="PYTHONADB_high",           # Replace with your service name
+                config_dir="/home/opc/wallet"
+            )
+            
+            print("✅ Connected to Oracle Autonomous Database!")
+            
+            # Test query
+            cursor = connection.cursor()
+            cursor.execute("SELECT 'Hello from Oracle ADB!' FROM dual")
+            result = cursor.fetchone()
+            print(f"Query result: {result[0]}")
+            
+            # Get database version
+            cursor.execute("SELECT banner FROM v$version WHERE rownum = 1")
+            version = cursor.fetchone()
+            print(f"Database version: {version[0]}")
+            
+            # Clean up
+            cursor.close()
+            connection.close()
+            print("✅ Connection closed successfully")
+            
+        except oracledb.DatabaseError as e:
+            error, = e.args
+            print(f"❌ Database error: {error.message}")
+        except Exception as e:
+            print(f"❌ Error: {e}")
+    
+    if __name__ == "__main__":
+        connect_to_oracle()
+    EOF
+  
+  # Create Flask web app example
+  - |
+    cat > /home/opc/flask_example.py << 'EOF'
+    #!/usr/bin/env python3
+    """
+    Simple Flask web application with Oracle Autonomous Database
+    
+    To run: python3 flask_example.py
+    Then visit: http://<instance_ip>:5000
+    """
+    from flask import Flask, render_template_string
+    import oracledb
+    import json
+    
+    app = Flask(__name__)
+    
+    # Database connection configuration - UPDATE THESE
+    DB_CONFIG = {
+        'user': 'ADMIN',
+        'password': 'your_password_here',  # Replace with your password
+        'dsn': 'PYTHONADB_high',           # Replace with your service name
+        'config_dir': '/home/opc/wallet'
+    }
+    
+    HTML_TEMPLATE = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Oracle ADB + Python Flask</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 40px; }
+            .success { color: green; }
+            .error { color: red; }
+            .info { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+        </style>
+    </head>
+    <body>
+        <h1>🐍 Python Flask + Oracle Autonomous Database</h1>
+        <div class="info">
+            <strong>Status:</strong> {{ status }}<br>
+            <strong>Timestamp:</strong> {{ timestamp }}<br>
+            <strong>python-oracledb version:</strong> {{ oracledb_version }}
+        </div>
+        {% if error %}
+            <div class="error">❌ Error: {{ error }}</div>
+        {% endif %}
+        {% if data %}
+            <div class="success">✅ Database query successful!</div>
+            <h3>Query Results:</h3>
+            <ul>
+            {% for row in data %}
+                <li>{{ row }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    </body>
+    </html>
+    '''
+    
+    @app.route('/')
+    def index():
+        try:
+            # Connect to database
+            connection = oracledb.connect(**DB_CONFIG)
+            cursor = connection.cursor()
+            
+            # Execute sample queries
+            queries_results = []
+            
+            # Basic test
+            cursor.execute("SELECT 'Hello from Oracle ADB!' as message FROM dual")
+            queries_results.append(f"Message: {cursor.fetchone()[0]}")
+            
+            # Current time
+            cursor.execute("SELECT TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') as current_time FROM dual")
+            queries_results.append(f"Database time: {cursor.fetchone()[0]}")
+            
+            # Database version
+            cursor.execute("SELECT banner FROM v$version WHERE rownum = 1")
+            queries_results.append(f"Version: {cursor.fetchone()[0]}")
+            
+            cursor.close()
+            connection.close()
+            
+            return render_

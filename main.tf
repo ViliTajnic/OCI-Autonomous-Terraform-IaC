@@ -1,163 +1,163 @@
+# Configure the Oracle Cloud Infrastructure Provider
 terraform {
   required_providers {
     oci = {
-      source  = "oracle/oci"
-      version = "~> 5.0"
+      source = "oracle/oci"
     }
   }
 }
 
-# Get availability domain
-data "oci_identity_availability_domains" "ads" {
-  compartment_id = var.tenancy_ocid
+# Data sources for availability domain and compute images
+data "oci_identity_availability_domain" "ad" {
+  compartment_id = var.compartment_id
+  ad_number      = 1
 }
 
-# Get Oracle Linux image
-data "oci_core_images" "ol_images" {
-  compartment_id   = var.compartment_ocid
-  operating_system = "Oracle Linux"
-  shape            = var.instance_shape
-  sort_by          = "TIMECREATED"
-  sort_order       = "DESC"
+data "oci_core_images" "compute_images" {
+  compartment_id           = var.compartment_id
+  operating_system         = "Oracle Linux"
+  operating_system_version = "8"
+  shape                    = var.use_free_tier ? "VM.Standard.E2.1.Micro" : var.instance_shape
+  sort_by                  = "TIMECREATED"
+  sort_order               = "DESC"
 }
 
 # VCN
 resource "oci_core_vcn" "vcn" {
-  compartment_id = var.compartment_ocid
+  compartment_id = var.compartment_id
+  display_name   = "${var.resource_prefix}-vcn"
   cidr_block     = "10.0.0.0/16"
-  display_name   = "adb-vcn"
+  dns_label      = "pythonvcn"
 }
 
 # Internet Gateway
-resource "oci_core_internet_gateway" "igw" {
-  compartment_id = var.compartment_ocid
+resource "oci_core_internet_gateway" "ig" {
+  compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.vcn.id
-  display_name   = "adb-igw"
+  display_name   = "${var.resource_prefix}-ig"
 }
 
-# Route Table
-resource "oci_core_route_table" "rt" {
-  compartment_id = var.compartment_ocid
+# Route table for public subnet
+resource "oci_core_route_table" "public_rt" {
+  compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.vcn.id
-  display_name   = "adb-rt"
+  display_name   = "${var.resource_prefix}-public-rt"
+
   route_rules {
     destination       = "0.0.0.0/0"
-    network_entity_id = oci_core_internet_gateway.igw.id
+    network_entity_id = oci_core_internet_gateway.ig.id
   }
 }
 
-# Security List
-resource "oci_core_security_list" "sl" {
-  compartment_id = var.compartment_ocid
+# Security list for public subnet
+resource "oci_core_security_list" "public_sl" {
+  compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.vcn.id
-  display_name   = "adb-sl"
-  
+  display_name   = "${var.resource_prefix}-public-sl"
+
   egress_security_rules {
     destination = "0.0.0.0/0"
     protocol    = "all"
   }
-  
+
   ingress_security_rules {
+    protocol = "6" # TCP
     source   = "0.0.0.0/0"
-    protocol = "6"
     tcp_options {
       min = 22
       max = 22
     }
   }
+
+  dynamic "ingress_security_rules" {
+    for_each = var.enable_web_ports ? [1] : []
+    content {
+      protocol = "6" # TCP
+      source   = "0.0.0.0/0"
+      tcp_options {
+        min = 80
+        max = 80
+      }
+    }
+  }
+
+  dynamic "ingress_security_rules" {
+    for_each = var.enable_web_ports ? [1] : []
+    content {
+      protocol = "6" # TCP
+      source   = "0.0.0.0/0"
+      tcp_options {
+        min = 443
+        max = 443
+      }
+    }
+  }
 }
 
-# Subnet
-resource "oci_core_subnet" "subnet" {
-  compartment_id    = var.compartment_ocid
-  vcn_id            = oci_core_vcn.vcn.id
-  cidr_block        = "10.0.1.0/24"
-  display_name      = "adb-subnet"
-  route_table_id    = oci_core_route_table.rt.id
-  security_list_ids = [oci_core_security_list.sl.id]
+# Public subnet
+resource "oci_core_subnet" "public_subnet" {
+  compartment_id      = var.compartment_id
+  vcn_id              = oci_core_vcn.vcn.id
+  display_name        = "${var.resource_prefix}-public-subnet"
+  cidr_block          = "10.0.1.0/24"
+  dns_label           = "publicsubnet"
+  route_table_id      = oci_core_route_table.public_rt.id
+  security_list_ids   = [oci_core_security_list.public_sl.id]
+  prohibit_public_ip_on_vnic = false
 }
 
-# Autonomous Database
-resource "oci_database_autonomous_database" "adb" {
-  compartment_id           = var.compartment_ocid
-  db_name                  = "PYTHONADB"
-  display_name             = "PythonADB"
-  admin_password           = var.admin_password
-  cpu_core_count           = 1
-  data_storage_size_in_gb  = 20
-  db_workload              = "OLTP"
-  is_free_tier             = true
-  license_model            = "LICENSE_INCLUDED"
-  whitelisted_ips          = ["0.0.0.0/0"]
-}
+# Compute instance
+resource "oci_core_instance" "compute_instance" {
+  availability_domain = data.oci_identity_availability_domain.ad.name
+  compartment_id      = var.compartment_id
+  display_name        = "${var.resource_prefix}-instance"
+  shape               = var.use_free_tier ? "VM.Standard.E2.1.Micro" : var.instance_shape
 
-# Compute Instance
-resource "oci_core_instance" "instance" {
-  compartment_id      = var.compartment_ocid
-  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
-  display_name        = "python-host"
-  shape               = var.instance_shape
+  dynamic "shape_config" {
+    for_each = var.use_free_tier ? [] : [1]
+    content {
+      ocpus         = var.instance_ocpus
+      memory_in_gbs = var.instance_memory_gb
+    }
+  }
 
   create_vnic_details {
-    subnet_id        = oci_core_subnet.subnet.id
+    subnet_id        = oci_core_subnet.public_subnet.id
+    display_name     = "${var.resource_prefix}-vnic"
     assign_public_ip = true
+    hostname_label   = "pythonhost"
   }
 
   source_details {
     source_type = "image"
-    source_id   = data.oci_core_images.ol_images.images[0].id
+    source_id   = data.oci_core_images.compute_images.images[0].id
   }
 
   metadata = {
     ssh_authorized_keys = var.ssh_public_key
-    user_data = base64encode(<<-EOF
-      #!/bin/bash
-      sudo yum update -y
-      sudo yum install -y python3 python3-pip wget unzip
-      sudo pip3 install oracledb
-      
-      # Create test script with modern oracledb
-      cat > /home/opc/test.py << 'PYEOF'
-import oracledb
-print("✅ Oracle Database driver ready!")
-print("📦 Using modern 'oracledb' package (no Oracle Instant Client needed)")
-print("🧪 Test connection: python3 test_connect.py")
-PYEOF
-
-      cat > /home/opc/test_connect.py << 'PYEOF'
-import oracledb
-try:
-    # Modern oracledb - no Oracle client installation needed!
-    connection = oracledb.connect(
-        user="ADMIN", 
-        password="${var.admin_password}", 
-        dsn="pythonadb_high",
-        config_dir="/home/opc/wallet"
-    )
-    
-    cursor = connection.cursor()
-    cursor.execute("SELECT 'Hello from modern Oracle Python!' FROM dual")
-    result = cursor.fetchone()
-    print("✅ Success:", result[0])
-    print("🚀 Connected using python-oracledb package!")
-    
-    cursor.close()
-    connection.close()
-    
-except Exception as e:
-    print("❌ Error:", e)
-    print("💡 Make sure wallet is in /home/opc/wallet/")
-    print("📝 Download from OCI Console → Oracle Database → PythonADB → DB Connection")
-PYEOF
-      
-      # Set proper ownership
-      sudo chown opc:opc /home/opc/*.py
-      sudo mkdir -p /home/opc/wallet
-      sudo chown opc:opc /home/opc/wallet
-      
-      # Log completion
-      echo "Setup completed with modern oracledb package at $(date)" | sudo tee /var/log/oracle-setup.log
-    EOF
-    )
+    user_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
+      db_password = var.db_admin_password
+    }))
   }
+}
+
+# Autonomous Database
+resource "oci_database_autonomous_database" "adb" {
+  compartment_id           = var.compartment_id
+  cpu_core_count           = var.use_free_tier ? 1 : var.adb_cpu_core_count
+  data_storage_size_in_tbs = var.use_free_tier ? null : var.adb_storage_tb
+  data_storage_size_in_gbs = var.use_free_tier ? 20 : null
+  db_name                  = var.db_name
+  admin_password           = var.db_admin_password
+  db_version               = var.adb_version
+  display_name             = "${var.resource_prefix}-adb"
+  license_model            = var.adb_license_model
+  is_free_tier             = var.use_free_tier
+  db_workload              = var.adb_workload
+  
+  # Auto-scaling (only for paid tier)
+  is_auto_scaling_enabled = var.use_free_tier ? false : var.adb_auto_scaling
+  
+  # Backup retention (only for paid tier)
+  backup_retention_period_in_days = var.use_free_tier ? null : var.adb_backup_retention_days
 }
