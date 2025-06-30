@@ -114,37 +114,40 @@ resource "oci_core_instance" "instance" {
       #!/bin/bash
       sudo yum update -y
       sudo yum install -y python3 python3-pip wget unzip
-      sudo pip3 install cx_Oracle
+      sudo pip3 install oracledb
       
-      # Install Oracle client
-      sudo mkdir -p /opt/oracle && cd /opt/oracle
-      sudo wget -q https://download.oracle.com/otn_software/linux/instantclient/1921000/instantclient-basic-linux.x64-19.21.0.0.0dbru.zip
-      sudo unzip -q instantclient-basic-linux.x64-19.21.0.0.0dbru.zip
-      
-      # Set environment globally
-      echo 'export LD_LIBRARY_PATH=/opt/oracle/instantclient_19_21:$LD_LIBRARY_PATH' | sudo tee -a /etc/environment
-      
-      # Create test script
+      # Create test script with modern oracledb
       cat > /home/opc/test.py << 'PYEOF'
-import cx_Oracle
-cx_Oracle.init_oracle_client(lib_dir="/opt/oracle/instantclient_19_21")
-print("Oracle client ready. Download wallet from OCI Console to /home/opc/wallet/")
-print("Test connection: python3 test_connect.py")
+import oracledb
+print("✅ Oracle Database driver ready!")
+print("📦 Using modern 'oracledb' package (no Oracle Instant Client needed)")
+print("🧪 Test connection: python3 test_connect.py")
 PYEOF
 
       cat > /home/opc/test_connect.py << 'PYEOF'
-import cx_Oracle
+import oracledb
 try:
-    cx_Oracle.init_oracle_client(lib_dir="/opt/oracle/instantclient_19_21")
-    connection = cx_Oracle.connect("ADMIN", "${var.admin_password}", "pythonadb_high", config_dir="/home/opc/wallet")
+    # Modern oracledb - no Oracle client installation needed!
+    connection = oracledb.connect(
+        user="ADMIN", 
+        password="${var.admin_password}", 
+        dsn="pythonadb_high",
+        config_dir="/home/opc/wallet"
+    )
+    
     cursor = connection.cursor()
-    cursor.execute("SELECT 'Hello Oracle!' FROM dual")
-    print("✅ Success:", cursor.fetchone()[0])
+    cursor.execute("SELECT 'Hello from modern Oracle Python!' FROM dual")
+    result = cursor.fetchone()
+    print("✅ Success:", result[0])
+    print("🚀 Connected using python-oracledb package!")
+    
     cursor.close()
     connection.close()
+    
 except Exception as e:
     print("❌ Error:", e)
-    print("Make sure wallet is in /home/opc/wallet/")
+    print("💡 Make sure wallet is in /home/opc/wallet/")
+    print("📝 Download from OCI Console → Oracle Database → PythonADB → DB Connection")
 PYEOF
       
       # Set proper ownership
@@ -153,7 +156,7 @@ PYEOF
       sudo chown opc:opc /home/opc/wallet
       
       # Log completion
-      echo "Setup completed at $(date)" | sudo tee /var/log/oracle-setup.log
+      echo "Setup completed with modern oracledb package at $(date)" | sudo tee /var/log/oracle-setup.log
     EOF
     )
   }
