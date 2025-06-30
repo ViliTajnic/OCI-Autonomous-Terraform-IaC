@@ -4,232 +4,153 @@ terraform {
       source  = "oracle/oci"
       version = "~> 5.0"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.4"
-    }
   }
-  required_version = ">= 1.0"
 }
 
-# Generate random password for wallet
-resource "random_password" "wallet_password" {
-  length  = 16
-  special = true
-}
-
-# Get availability domains
+# Get availability domain
 data "oci_identity_availability_domains" "ads" {
   compartment_id = var.tenancy_ocid
 }
 
-# Get latest Oracle Linux image
-data "oci_core_images" "oracle_linux_images" {
-  compartment_id           = var.compartment_ocid
-  operating_system         = "Oracle Linux"
-  operating_system_version = "8"
-  shape                    = var.instance_shape
-  sort_by                  = "TIMECREATED"
-  sort_order               = "DESC"
+# Get Oracle Linux image
+data "oci_core_images" "ol_images" {
+  compartment_id   = var.compartment_ocid
+  operating_system = "Oracle Linux"
+  shape            = var.instance_shape
+  sort_by          = "TIMECREATED"
+  sort_order       = "DESC"
 }
 
 # VCN
-resource "oci_core_vcn" "adb_vcn" {
-  cidr_block     = var.vcn_cidr_block
+resource "oci_core_vcn" "vcn" {
   compartment_id = var.compartment_ocid
-  display_name   = "${var.adb_display_name}-vcn"
-  dns_label      = "adbvcn"
-
-  freeform_tags = {
-    "CreatedBy" = "ORM-Terraform"
-    "Purpose"   = "ADB-Python-Demo"
-  }
+  cidr_block     = "10.0.0.0/16"
+  display_name   = "adb-vcn"
 }
 
 # Internet Gateway
-resource "oci_core_internet_gateway" "adb_igw" {
+resource "oci_core_internet_gateway" "igw" {
   compartment_id = var.compartment_ocid
-  display_name   = "${var.adb_display_name}-igw"
-  vcn_id         = oci_core_vcn.adb_vcn.id
-  enabled        = true
-
-  freeform_tags = {
-    "CreatedBy" = "ORM-Terraform"
-    "Purpose"   = "ADB-Python-Demo"
-  }
+  vcn_id         = oci_core_vcn.vcn.id
+  display_name   = "adb-igw"
 }
 
 # Route Table
-resource "oci_core_route_table" "public_route_table" {
+resource "oci_core_route_table" "rt" {
   compartment_id = var.compartment_ocid
-  vcn_id         = oci_core_vcn.adb_vcn.id
-  display_name   = "${var.adb_display_name}-public-rt"
-
+  vcn_id         = oci_core_vcn.vcn.id
+  display_name   = "adb-rt"
   route_rules {
     destination       = "0.0.0.0/0"
-    destination_type  = "CIDR_BLOCK"
-    network_entity_id = oci_core_internet_gateway.adb_igw.id
-  }
-
-  freeform_tags = {
-    "CreatedBy" = "ORM-Terraform"
-    "Purpose"   = "ADB-Python-Demo"
+    network_entity_id = oci_core_internet_gateway.igw.id
   }
 }
 
 # Security List
-resource "oci_core_security_list" "public_security_list" {
+resource "oci_core_security_list" "sl" {
   compartment_id = var.compartment_ocid
-  vcn_id         = oci_core_vcn.adb_vcn.id
-  display_name   = "${var.adb_display_name}-public-sl"
-
-  # Egress Rules - Allow all outbound
+  vcn_id         = oci_core_vcn.vcn.id
+  display_name   = "adb-sl"
+  
   egress_security_rules {
-    stateless        = false
-    destination      = "0.0.0.0/0"
-    destination_type = "CIDR_BLOCK"
-    protocol         = "all"
+    destination = "0.0.0.0/0"
+    protocol    = "all"
   }
-
-  # Ingress Rules - SSH
+  
   ingress_security_rules {
-    stateless   = false
-    source      = "0.0.0.0/0"
-    source_type = "CIDR_BLOCK"
-    protocol    = "6"
+    source   = "0.0.0.0/0"
+    protocol = "6"
     tcp_options {
       min = 22
       max = 22
     }
   }
-
-  # Ingress Rules - HTTP
-  ingress_security_rules {
-    stateless   = false
-    source      = "0.0.0.0/0"
-    source_type = "CIDR_BLOCK"
-    protocol    = "6"
-    tcp_options {
-      min = 80
-      max = 80
-    }
-  }
-
-  # Ingress Rules - HTTPS
-  ingress_security_rules {
-    stateless   = false
-    source      = "0.0.0.0/0"
-    source_type = "CIDR_BLOCK"
-    protocol    = "6"
-    tcp_options {
-      min = 443
-      max = 443
-    }
-  }
-
-  freeform_tags = {
-    "CreatedBy" = "ORM-Terraform"
-    "Purpose"   = "ADB-Python-Demo"
-  }
 }
 
-# Public Subnet
-resource "oci_core_subnet" "public_subnet" {
-  cidr_block        = var.public_subnet_cidr_block
-  display_name      = "${var.adb_display_name}-public-subnet"
+# Subnet
+resource "oci_core_subnet" "subnet" {
   compartment_id    = var.compartment_ocid
-  vcn_id            = oci_core_vcn.adb_vcn.id
-  route_table_id    = oci_core_route_table.public_route_table.id
-  security_list_ids = [oci_core_security_list.public_security_list.id]
-  dns_label         = "publicsubnet"
-
-  freeform_tags = {
-    "CreatedBy" = "ORM-Terraform"
-    "Purpose"   = "ADB-Python-Demo"
-  }
+  vcn_id            = oci_core_vcn.vcn.id
+  cidr_block        = "10.0.1.0/24"
+  display_name      = "adb-subnet"
+  route_table_id    = oci_core_route_table.rt.id
+  security_list_ids = [oci_core_security_list.sl.id]
 }
 
 # Autonomous Database
 resource "oci_database_autonomous_database" "adb" {
-  compartment_id = var.compartment_ocid
-  db_name        = upper(replace(var.adb_display_name, "-", ""))
-  display_name   = var.adb_display_name
-  admin_password = var.adb_admin_password
-  cpu_core_count = var.is_free_tier ? 1 : var.adb_cpu_core_count
-
-  # Storage configuration - use GB for free tier, TB for paid tier
-  data_storage_size_in_tbs = var.is_free_tier ? null : var.adb_data_storage_size_in_tbs
-  data_storage_size_in_gb  = var.is_free_tier ? 20 : null
-
-  # Database type - ATP (Autonomous Transaction Processing)
-  db_workload = "OLTP"
-
-  # Auto scaling - Disabled for free tier, enabled for paid tier
-  is_auto_scaling_enabled             = var.is_free_tier ? false : var.enable_auto_scaling
-  is_auto_scaling_for_storage_enabled = var.is_free_tier ? false : var.enable_auto_scaling
-
-  # Free tier
-  is_free_tier = var.is_free_tier
-
-  # License model
-  license_model = "LICENSE_INCLUDED"
-
-  # Minimal network configuration
-  whitelisted_ips = ["0.0.0.0/0"]
-
-  # Simplified tags
-  freeform_tags = {
-    "Purpose" = "Demo"
-  }
-
-  lifecycle {
-    ignore_changes = [defined_tags]
-  }
-}
-
-# Download ADB Wallet
-resource "oci_database_autonomous_database_wallet" "adb_wallet" {
-  autonomous_database_id = oci_database_autonomous_database.adb.id
-  password               = random_password.wallet_password.result
-  base64_encode_content  = true
+  compartment_id           = var.compartment_ocid
+  db_name                  = "PYTHONADB"
+  display_name             = "PythonADB"
+  admin_password           = var.admin_password
+  cpu_core_count           = 1
+  data_storage_size_in_gb  = 20
+  db_workload              = "OLTP"
+  is_free_tier             = true
+  license_model            = "LICENSE_INCLUDED"
+  whitelisted_ips          = ["0.0.0.0/0"]
 }
 
 # Compute Instance
-resource "oci_core_instance" "python_host" {
-  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
+resource "oci_core_instance" "instance" {
   compartment_id      = var.compartment_ocid
-  display_name        = var.instance_display_name
+  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
+  display_name        = "python-host"
   shape               = var.instance_shape
 
   create_vnic_details {
-    subnet_id                 = oci_core_subnet.public_subnet.id
-    display_name              = "primary-vnic"
-    assign_public_ip          = true
-    assign_private_dns_record = true
-    hostname_label            = "pythonhost"
+    subnet_id        = oci_core_subnet.subnet.id
+    assign_public_ip = true
   }
 
   source_details {
     source_type = "image"
-    source_id   = data.oci_core_images.oracle_linux_images.images[0].id
+    source_id   = data.oci_core_images.ol_images.images[0].id
   }
 
   metadata = {
     ssh_authorized_keys = var.ssh_public_key
-    user_data = base64encode(templatefile("${path.module}/cloud-init.yml", {
-      wallet_content     = oci_database_autonomous_database_wallet.adb_wallet.content
-      wallet_password    = random_password.wallet_password.result
-      adb_service_name   = "${upper(replace(var.adb_display_name, "-", ""))}_high"
-      admin_password     = var.adb_admin_password
-    }))
-  }
+    user_data = base64encode(<<-EOF
+      #!/bin/bash
+      yum update -y
+      yum install -y python3 python3-pip wget unzip
+      pip3 install cx_Oracle
+      
+      # Install Oracle client
+      mkdir -p /opt/oracle && cd /opt/oracle
+      wget -q https://download.oracle.com/otn_software/linux/instantclient/1921000/instantclient-basic-linux.x64-19.21.0.0.0dbru.zip
+      unzip -q instantclient-basic-linux.x64-19.21.0.0.0dbru.zip
+      
+      # Set environment
+      echo 'export LD_LIBRARY_PATH=/opt/oracle/instantclient_19_21:$LD_LIBRARY_PATH' >> /etc/environment
+      
+      # Create test script
+      cat > /home/opc/test.py << 'PYEOF'
+import cx_Oracle
+cx_Oracle.init_oracle_client(lib_dir="/opt/oracle/instantclient_19_21")
+print("Oracle client ready. Download wallet from OCI Console to /home/opc/wallet/")
+print("Test connection: python3 test_connect.py")
+PYEOF
 
-  freeform_tags = {
-    "CreatedBy" = "ORM-Terraform"
-    "Purpose"   = "ADB-Python-Demo"
-  }
-
-  lifecycle {
-    ignore_changes = [defined_tags]
+      cat > /home/opc/test_connect.py << 'PYEOF'
+import cx_Oracle
+try:
+    cx_Oracle.init_oracle_client(lib_dir="/opt/oracle/instantclient_19_21")
+    connection = cx_Oracle.connect("ADMIN", "${var.admin_password}", "pythonadb_high", config_dir="/home/opc/wallet")
+    cursor = connection.cursor()
+    cursor.execute("SELECT 'Hello Oracle!' FROM dual")
+    print("✅ Success:", cursor.fetchone()[0])
+    cursor.close()
+    connection.close()
+except Exception as e:
+    print("❌ Error:", e)
+    print("Make sure wallet is in /home/opc/wallet/")
+PYEOF
+      
+      chown opc:opc /home/opc/*.py
+      mkdir -p /home/opc/wallet
+      chown opc:opc /home/opc/wallet
+    EOF
+    )
   }
 }

@@ -1,224 +1,66 @@
-title: "Oracle Autonomous Database with Python Host"
-stackDescription: "Deploy Oracle Autonomous Database with Oracle Linux compute instance configured for Python connectivity"
+title: "Oracle ADB + Python"
+stackDescription: "Minimal Oracle Autonomous Database with Python setup"
 schemaVersion: "1.1.0"
-version: "20250627"
+version: "20250630"
 locale: "en"
 
 variableGroups:
-  - title: "General Configuration"
-    visible: false
+  - title: "Required Configuration"
     variables:
-      - tenancy_ocid
-      - region
-      - compartment_ocid
-
-  - title: "Always Free Tier Configuration"
-    visible: ${is_free_tier}
-    variables:
-      - free_tier_info
-
-  - title: "Autonomous Database Configuration"
-    visible: true
-    variables:
-      - adb_display_name
-      - adb_admin_password
-      - adb_cpu_core_count
-      - adb_data_storage_size_in_tbs
-      - is_free_tier
-      - enable_auto_scaling
-
-  - title: "Compute Instance Configuration"
-    visible: true
-    variables:
-      - instance_display_name
-      - instance_shape
+      - admin_password
       - ssh_public_key
-
-  - title: "Network Configuration"
-    visible: true
-    variables:
-      - vcn_cidr_block
-      - public_subnet_cidr_block
 
 variables:
   tenancy_ocid:
     type: string
     required: true
     visible: false
-    title: "Tenancy ID"
-    description: "The Oracle Cloud Identifier (OCID) for your tenancy"
 
   region:
     type: oci:identity:region:name
     required: true
     visible: false
-    title: "Region"
-    description: "The OCI region where resources will be created"
 
   compartment_ocid:
     type: oci:identity:compartment:id
     required: true
     visible: false
-    title: "Compartment"
-    description: "The compartment where resources will be created"
 
-  free_tier_info:
-    type: string
-    title: "📋 Always Free Tier Specifications"
-    description: |
-      When Always Free Tier is enabled, the following fixed specifications apply:
-      
-      🔹 **CPU Cores**: 1 OCPU (fixed)
-      🔹 **Storage**: 20GB (fixed)
-      🔹 **Auto-scaling**: Disabled (not supported)
-      🔹 **Quota Limit**: Maximum 2 ADB instances per tenancy
-      
-      ⚠️ **Important**: If you already have 2 Always Free ADBs, this deployment will fail. 
-      Either delete an existing free tier ADB or set 'Use Always Free Tier' to false.
-    default: "Specifications shown above"
-    visible: ${is_free_tier}
-
-  adb_display_name:
-    type: string
-    required: true
-    default: "PythonADB"
-    title: "Autonomous Database Name"
-    description: "Display name for the Autonomous Database"
-    pattern: "^[a-zA-Z][a-zA-Z0-9_-]*$"
-    minLength: 1
-    maxLength: 30
-
-  adb_admin_password:
+  admin_password:
     type: password
     required: true
     title: "Database Admin Password"
-    description: "Password for the ADMIN user (8-30 chars, demo purposes)"
-    pattern: "^[A-Za-z\\d#_@!]{8,30}$"
-    confirmation: true
+    description: "Password for ADMIN user (8+ characters)"
+    minLength: 8
+    maxLength: 30
 
-  adb_cpu_core_count:
-    type: integer
+  ssh_public_key:
+    type: oci:core:ssh:publickey
     required: true
-    default: 1
-    minimum: 1
-    maximum: 128
-    title: "CPU Core Count"
-    description: "Number of OCPU cores (Always Free tier automatically uses 1 OCPU regardless of this setting)"
-    visible:
-      not:
-        - ${is_free_tier}
-
-  adb_data_storage_size_in_tbs:
-    type: integer
-    required: true
-    default: 1
-    minimum: 1
-    maximum: 384
-    title: "Data Storage Size (TB)"
-    description: "Data storage size in terabytes (Always Free tier automatically uses 20GB regardless of this setting)"
-    visible:
-      not:
-        - ${is_free_tier}
-
-  is_free_tier:
-    type: boolean
-    required: true
-    default: false
-    title: "Use Always Free Tier"
-    description: "Deploy using Oracle Cloud Always Free tier (⚠️ Limited to 2 ADBs per tenancy - if quota exceeded, set to false for paid tier)"
-
-  enable_auto_scaling:
-    type: boolean
-    required: true
-    default: true
-    title: "Enable Auto Scaling"
-    description: "Enable automatic scaling for CPU and storage (Always Free tier automatically disables auto-scaling)"
-    visible:
-      not:
-        - ${is_free_tier}
-
-  instance_display_name:
-    type: string
-    required: true
-    default: "PythonHost"
-    title: "Compute Instance Name"
-    description: "Display name for the compute instance"
+    title: "SSH Public Key"
+    description: "SSH public key for instance access"
 
   instance_shape:
     type: oci:core:instanceshape:name
     required: true
     default: "VM.Standard.E2.1.Micro"
     title: "Instance Shape"
-    description: "Shape for the compute instance (VM.Standard.E2.1.Micro is Always Free eligible)"
     dependsOn:
       compartmentId: ${compartment_ocid}
 
-  ssh_public_key:
-    type: oci:core:ssh:publickey
-    required: true
-    title: "SSH Public Key"
-    description: "SSH public key for accessing the compute instance"
-
-  vcn_cidr_block:
-    type: string
-    required: true
-    default: "10.0.0.0/16"
-    title: "VCN CIDR Block"
-    description: "CIDR block for the Virtual Cloud Network"
-
-  public_subnet_cidr_block:
-    type: string
-    required: true
-    default: "10.0.1.0/24"
-    title: "Public Subnet CIDR Block"
-    description: "CIDR block for the public subnet"
-
 outputs:
-  autonomous_database_id:
+  database_id:
+    title: "Database OCID"
     type: ocid
-    title: "Autonomous Database OCID"
-    description: "OCID of the created Autonomous Database"
 
-  database_connection_info:
-    type: json
-    title: "Database Connection Information"
-    description: "Database connection details and service levels"
-
-  adb_service_console_url:
-    type: link
-    title: "ADB Service Console"
-    description: "URL to access the Autonomous Database service console"
-
-  compute_instance_public_ip:
+  instance_ip:
+    title: "Instance IP"
     type: string
-    title: "Compute Instance Public IP"
-    description: "Public IP address of the compute instance"
 
-  ssh_connection_command:
+  ssh_command:
+    title: "SSH Command"
     type: string
-    title: "SSH Connection Command"
-    description: "Command to connect to the compute instance via SSH"
 
-  wallet_password:
+  setup_instructions:
+    title: "Setup Instructions"
     type: string
-    title: "Wallet Password"
-    description: "Auto-generated password for the database wallet"
-
-  python_test_command:
-    type: string
-    title: "Python Test Command"
-    description: "Command to test Python database connectivity"
-
-outputGroups:
-  - title: "Database Information"
-    outputs:
-      - autonomous_database_id
-      - database_connection_info
-      - adb_service_console_url
-      - wallet_password
-
-  - title: "Compute Instance"
-    outputs:
-      - compute_instance_public_ip
-      - ssh_connection_command
-      - python_test_command
