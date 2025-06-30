@@ -17,5 +17,6 @@ output "setup_instructions" {
     3. Upload wallet: scp wallet.zip opc@${oci_core_instance.instance.public_ip}:
     4. Extract: unzip wallet.zip -d wallet/
     5. Test: python3 test_connect.py
+    6. Happy testing!
   EOT
 }
