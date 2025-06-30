@@ -112,17 +112,17 @@ resource "oci_core_instance" "instance" {
     ssh_authorized_keys = var.ssh_public_key
     user_data = base64encode(<<-EOF
       #!/bin/bash
-      yum update -y
-      yum install -y python3 python3-pip wget unzip
-      pip3 install cx_Oracle
+      sudo yum update -y
+      sudo yum install -y python3 python3-pip wget unzip
+      sudo pip3 install cx_Oracle
       
       # Install Oracle client
-      mkdir -p /opt/oracle && cd /opt/oracle
-      wget -q https://download.oracle.com/otn_software/linux/instantclient/1921000/instantclient-basic-linux.x64-19.21.0.0.0dbru.zip
-      unzip -q instantclient-basic-linux.x64-19.21.0.0.0dbru.zip
+      sudo mkdir -p /opt/oracle && cd /opt/oracle
+      sudo wget -q https://download.oracle.com/otn_software/linux/instantclient/1921000/instantclient-basic-linux.x64-19.21.0.0.0dbru.zip
+      sudo unzip -q instantclient-basic-linux.x64-19.21.0.0.0dbru.zip
       
-      # Set environment
-      echo 'export LD_LIBRARY_PATH=/opt/oracle/instantclient_19_21:$LD_LIBRARY_PATH' >> /etc/environment
+      # Set environment globally
+      echo 'export LD_LIBRARY_PATH=/opt/oracle/instantclient_19_21:$LD_LIBRARY_PATH' | sudo tee -a /etc/environment
       
       # Create test script
       cat > /home/opc/test.py << 'PYEOF'
@@ -147,9 +147,13 @@ except Exception as e:
     print("Make sure wallet is in /home/opc/wallet/")
 PYEOF
       
-      chown opc:opc /home/opc/*.py
-      mkdir -p /home/opc/wallet
-      chown opc:opc /home/opc/wallet
+      # Set proper ownership
+      sudo chown opc:opc /home/opc/*.py
+      sudo mkdir -p /home/opc/wallet
+      sudo chown opc:opc /home/opc/wallet
+      
+      # Log completion
+      echo "Setup completed at $(date)" | sudo tee /var/log/oracle-setup.log
     EOF
     )
   }
