@@ -1,43 +1,39 @@
-# Oracle Autonomous Database + Python - Simple ORM Stack
+# OCI Autonomous Database + Python Terraform Stack
 
-A minimal OCI Resource Manager stack that deploys Oracle Autonomous Database with a Python-ready compute instance.
+A minimal OCI Resource Manager stack that deploys Oracle Autonomous Database with a Python-ready compute instance using the modern **python-oracledb** driver.
 
-## 🎯 What This Deploys
+## 🎯 What You Get
 
 - **Oracle Autonomous Database** (Always Free tier - 20GB, 1 OCPU)
 - **Oracle Linux Instance** (Always Free tier - VM.Standard.E2.1.Micro)
-- **Pre-configured Python Environment** (Oracle Instant Client + cx_Oracle)
+- **Pre-configured Python Environment** (python-oracledb driver)
 - **Basic VCN** (10.0.0.0/16 with public subnet)
 
-## 🚀 Quick Deployment
+## 🚀 Quick Start
 
-### 1. Create the Stack
-1. **Download** all files from this repository
-2. **Create ZIP** file containing: `main.tf`, `variables.tf`, `outputs.tf`, `schema.yaml`
-3. **Go to OCI Console** → Developer Services → Resource Manager → Stacks
-4. **Create Stack** → Upload ZIP file
+### 1. Prepare Files
+- Download all files from this repository
+- Create ZIP file containing: `main.tf`, `variables.tf`, `outputs.tf`, `schema.yaml`
 
-### 2. Configure Variables
+### 2. Deploy via Resource Manager
+- Go to OCI Console → Developer Services → Resource Manager → Stacks
+- Create Stack → Upload ZIP file
 - **Database Admin Password**: 8+ characters (e.g., `Demo123!`)
 - **SSH Public Key**: Your SSH public key for instance access
+- Plan → Review resources
+- Apply → Deploy (takes ~3-5 minutes)
 
-### 3. Deploy
-1. **Plan** → Review resources
-2. **Apply** → Deploy (takes ~3-5 minutes)
-
-## 📋 Post-Deployment Setup
-
-### Step 1: Get Connection Info
+### 3. Get Connection Details
 From stack outputs, note:
 - **Instance IP**: Public IP of your compute instance
 - **SSH Command**: Ready-to-use SSH command
 
-### Step 2: Download Database Wallet
-1. **Go to OCI Console** → Oracle Database → Autonomous Database
-2. **Click "PythonADB"** → **DB Connection**
-3. **Download Wallet** → Set any password → Save as `wallet.zip`
+### 4. Download Database Wallet
+- Go to OCI Console → Oracle Database → Autonomous Database
+- Click "PythonADB" → DB Connection
+- Download Wallet → Set any password → Save as `wallet.zip`
 
-### Step 3: Setup Instance
+### 5. Connect and Test
 ```bash
 # SSH to instance
 ssh opc@<instance_ip>
@@ -53,22 +49,19 @@ unzip wallet.zip -d wallet/
 python3 test_connect.py
 ```
 
-## ✅ What's Pre-Installed
+## 📦 Pre-installed Software
 
-- **Oracle Instant Client 19.21** - Database connectivity
 - **Python 3** - Latest version from Oracle Linux
-- **cx_Oracle** - Python Oracle database driver
-- **Environment Variables** - LD_LIBRARY_PATH configured
+- **python-oracledb** - Modern Oracle database driver (successor to cx_Oracle)
+- **Environment Variables** - Properly configured for database connectivity
 - **Test Scripts** - Ready-to-run connection tests
-
-## 🧪 Testing the Connection
 
 After setup, test with:
 ```bash
 python3 test_connect.py
 ```
 
-**Expected output:**
+Expected output:
 ```
 ✅ Success: Hello Oracle!
 ```
@@ -78,42 +71,95 @@ If you get an error, check:
 # Verify wallet files
 ls -la wallet/
 
-# Test basic Oracle client
-python3 test.py
+# Test basic python-oracledb installation
+python3 -c "import oracledb; print('python-oracledb installed successfully')"
 ```
 
-## 📁 File Structure
+## 📁 Repository Structure
 
 ```
 oracle-adb-python-stack/
-├── main.tf           # Core infrastructure
-├── variables.tf      # Input variables
-├── outputs.tf        # Stack outputs
-├── schema.yaml       # ORM UI configuration
-└── README.md         # This file
+├── main.tf              # Core infrastructure
+├── variables.tf         # Input variables
+├── outputs.tf           # Stack outputs
+├── schema.yaml          # ORM UI configuration
+└── README.md            # This file
 ```
 
-## 🔗 Connection Details
+## 🗄️ Database Details
 
-### Database Information:
 - **Name**: PYTHONADB
 - **Workload**: OLTP (Transaction Processing)
 - **Admin User**: ADMIN
 - **Service Names**: pythonadb_high, pythonadb_medium, pythonadb_low
 
-### Python Connection Example:
-```python
-import cx_Oracle
+## 🐍 Python Connection Example
 
-# Initialize Oracle client
-cx_Oracle.init_oracle_client(lib_dir="/opt/oracle/instantclient_19_21")
+### Using python-oracledb (Thin Mode - Recommended)
+
+```python
+import oracledb
+
+# Connect to database using wallet
+connection = oracledb.connect(
+    user="ADMIN",
+    password="your_password",
+    dsn="pythonadb_high",
+    config_dir="/home/opc/wallet"
+)
+
+# Execute query
+cursor = connection.cursor()
+cursor.execute("SELECT 'Hello Oracle!' FROM dual")
+result = cursor.fetchone()
+print(result[0])
+
+# Clean up
+cursor.close()
+connection.close()
+```
+
+### Using python-oracledb (Thick Mode - Optional)
+
+For advanced Oracle Database features, you can enable Thick mode:
+
+```python
+import oracledb
+
+# Initialize Oracle Client (for Thick mode)
+oracledb.init_oracle_client()
 
 # Connect to database
-connection = cx_Oracle.connect(
-    "ADMIN", 
-    "your_password", 
-    "pythonadb_high",
+connection = oracledb.connect(
+    user="ADMIN",
+    password="your_password",
+    dsn="pythonadb_high",
     config_dir="/home/opc/wallet"
+)
+
+# Execute query
+cursor = connection.cursor()
+cursor.execute("SELECT 'Hello Oracle!' FROM dual")
+result = cursor.fetchone()
+print(result[0])
+
+# Clean up
+cursor.close()
+connection.close()
+```
+
+### Connection Without Wallet (TLS - Alternative)
+
+For simplified deployment, you can also connect without a wallet using TLS:
+
+```python
+import oracledb
+
+# Connect using connection string (no wallet required)
+connection = oracledb.connect(
+    user="ADMIN",
+    password="your_password",
+    dsn="(description=(retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1521)(host=your-adb-host))(connect_data=(service_name=pythonadb_high))(security=(ssl_server_dn_match=yes)))"
 )
 
 # Execute query
@@ -129,44 +175,34 @@ connection.close()
 
 ## 💰 Cost Information
 
-### Always Free Resources:
 - **ADB**: 20GB storage, 1 OCPU (free forever)
 - **Compute**: VM.Standard.E2.1.Micro (free forever)
 - **Network**: VCN, subnet, gateway (free)
 
 **Total Cost**: $0/month (within Always Free limits)
 
-## 🛠️ Troubleshooting
+## 🔧 Troubleshooting
 
-### Common Issues:
+### Common Issues
 
-#### 1. SSH Connection Failed
+**SSH Connection Problems**:
 ```bash
 # Check security group allows SSH (port 22)
 # Verify your private key matches the public key used
 ```
 
-#### 2. Python Import Error
+**Database Connection Issues**:
 ```bash
-# Check Oracle client installation
-ls -la /opt/oracle/instantclient_19_21/
+# Check python-oracledb installation
+python3 -c "import oracledb; print(oracledb.__version__)"
 
-# Verify environment
-echo $LD_LIBRARY_PATH
-```
-
-#### 3. Database Connection Failed
-```bash
 # Verify wallet files
 ls -la wallet/
 cat wallet/tnsnames.ora
 
 # Check service name (case sensitive)
 # pythonadb_high, pythonadb_medium, pythonadb_low
-```
 
-#### 4. Permission Denied
-```bash
 # Make sure you're user 'opc'
 whoami
 
@@ -174,54 +210,7 @@ whoami
 ls -la /home/opc/
 ```
 
-## 🔧 Customization
-
-### Change Instance Shape:
-Edit `variables.tf`:
-```hcl
-variable "instance_shape" {
-  default = "VM.Standard.E3.Flex"  # For more resources
-}
-```
-
-### Use Paid ADB:
-Edit `main.tf`:
-```hcl
-resource "oci_database_autonomous_database" "adb" {
-  cpu_core_count           = 2        # More CPU
-  data_storage_size_in_tbs = 1        # Use TB for paid tier
-  is_free_tier             = false    # Disable free tier
-  # ... other settings
-}
-```
-
-## 📚 Next Steps
-
-### Development Ideas:
-1. **Build a Flask app** connecting to Oracle ADB
-2. **Create data analytics** with pandas + Oracle
-3. **Set up automated ETL** processes
-4. **Deploy machine learning** models using Oracle data
-
-### Additional Setup:
-```bash
-# Install additional Python packages
-sudo pip3 install pandas flask sqlalchemy
-
-# Set up Jupyter notebook
-sudo pip3 install jupyter
-jupyter notebook --ip=0.0.0.0 --no-browser
-```
-
-## 🤝 Support
-
-### For Issues:
-- **ORM Stack**: Check Terraform logs in OCI Console
-- **Database**: Use OCI Support or documentation
-- **Python**: Check cx_Oracle documentation
-- **Instance**: SSH and check `/var/log/cloud-init.log`
-
-### Useful Commands:
+### Instance Setup Logs
 ```bash
 # Check cloud-init logs
 sudo cat /var/log/cloud-init.log
@@ -233,12 +222,96 @@ sudo cat /var/log/oracle-setup.log
 sudo systemctl restart cloud-init
 ```
 
-## 🎉 Success Criteria
+## 📈 Scaling to Production
+
+### Modify Variables
+
+Edit `variables.tf`:
+```hcl
+variable "instance_shape" {
+  default = "VM.Standard.E3.Flex" # For more resources
+}
+```
+
+### Upgrade Database
+
+Edit `main.tf`:
+```hcl
+resource "oci_database_autonomous_database" "adb" {
+  cpu_core_count = 2              # More CPU
+  data_storage_size_in_tbs = 1    # Use TB for paid tier
+  is_free_tier = false            # Disable free tier
+  # ... other settings
+}
+```
+
+## 🛠️ Use Cases
+
+- **Flask/Django Apps**: Build web applications with enterprise-grade database backends
+- **Data Analytics**: Use pandas, numpy, and other data science libraries with Oracle data
+- **ETL Processes**: Develop automated data pipelines
+- **Machine Learning**: Deploy ML models using Oracle as the data source
+
+### Install Additional Packages
+```bash
+# Install additional Python packages
+sudo pip3 install pandas flask sqlalchemy jupyter
+
+# Set up Jupyter notebook
+jupyter notebook --ip=0.0.0.0 --no-browser
+```
+
+## 🆕 Migration from cx_Oracle
+
+If you're migrating from cx_Oracle to python-oracledb:
+
+### Key Changes
+- **Package name**: `cx_Oracle` → `oracledb`
+- **Import statement**: `import cx_Oracle` → `import oracledb`
+- **Initialization**: `cx_Oracle.init_oracle_client()` → `oracledb.init_oracle_client()` (only for Thick mode)
+- **Default mode**: python-oracledb runs in Thin mode by default (no Oracle Client libraries required)
+
+### Migration Example
+**Old (cx_Oracle)**:
+```python
+import cx_Oracle
+cx_Oracle.init_oracle_client(lib_dir="/opt/oracle/instantclient_19_21")
+connection = cx_Oracle.connect("user", "password", "dsn")
+```
+
+**New (python-oracledb)**:
+```python
+import oracledb
+# Thin mode (default) - no init_oracle_client() needed
+connection = oracledb.connect(user="user", password="password", dsn="dsn")
+```
+
+## 📚 Additional Resources
+
+- **ORM Stack**: Check Terraform logs in OCI Console
+- **Database**: Use OCI Support or documentation
+- **python-oracledb**: Check [python-oracledb documentation](https://python-oracledb.readthedocs.io/)
+- **Instance**: SSH and check `/var/log/cloud-init.log`
+
+## ✅ Success Checklist
 
 You've successfully completed the setup when:
-1. ✅ SSH connection works
-2. ✅ `python3 test.py` shows Oracle client ready
-3. ✅ `python3 test_connect.py` shows successful database connection
-4. ✅ You can run your own Python scripts with Oracle connectivity
 
-Happy coding with Oracle Autonomous Database! 🚀
+- ✅ SSH connection works
+- ✅ `python3 -c "import oracledb"` runs without errors
+- ✅ `python3 test_connect.py` shows successful database connection
+- ✅ You can run your own Python scripts with Oracle connectivity
+
+Happy coding with Oracle Autonomous Database and python-oracledb! 🚀
+
+---
+
+## 📝 About python-oracledb
+
+**python-oracledb** is the modern successor to cx_Oracle, Oracle's official Python driver for Oracle Database. Key advantages:
+
+- **Thin Mode**: Direct connection to Oracle Database without requiring Oracle Client libraries
+- **Thick Mode**: Optional mode for advanced Oracle Database features
+- **Enhanced Performance**: Optimized for better performance and resource usage
+- **Future-Proof**: Actively maintained and updated by Oracle
+- **Easy Migration**: Drop-in replacement for most cx_Oracle applications
