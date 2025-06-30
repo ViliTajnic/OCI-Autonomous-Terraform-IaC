@@ -1,66 +1,68 @@
 title: "Oracle Autonomous Database + Python Stack"
-description: "Deploy Oracle Autonomous Database with Python-ready compute instance. Toggle between Always Free and paid tiers."
-informationalText: "This stack deploys a complete Python development environment with Oracle Autonomous Database. Use Always Free tier for development or paid tier for production workloads."
+description: "Deploy Oracle Autonomous Database with Python environment. Always Free tier by default."
+informationalText: "✅ Always Free tier is enabled by default (perfect for development). Uncheck 'Enable Free Tier' only if you need production resources and understand billing implications."
 schemaVersion: 1.1.0
 version: "2.0"
 locale: "en"
 
 # Variable Groups for better UI organization
 variableGroups:
-  - title: "Required Configuration"
+  - title: "🔧 Required Configuration"
     visible: true
     variables:
       - compartment_id
       - ssh_public_key
       - db_admin_password
 
-  - title: "Deployment Options"
+  - title: "⚡ Deployment Mode"
     visible: true
     variables:
-      - use_free_tier
+      - enable_free_tier
+
+  - title: "📝 Basic Settings (Optional)"
+    visible: true
+    variables:
       - resource_prefix
       - db_name
+      - enable_web_access
 
-  - title: "Compute Configuration (Paid Tier)"
+  - title: "💰 Paid Tier Configuration"
     visible:
       not:
-        - ${use_free_tier}
+        - ${enable_free_tier}
     variables:
-      - instance_shape
-      - instance_ocpus
-      - instance_memory_gb
+      - compute_shape
+      - compute_ocpus
+      - compute_memory_gb
+      - database_ocpus
+      - database_storage_tb
+      - enable_auto_scaling
 
-  - title: "Database Configuration (Paid Tier)"
+  - title: "🔧 Advanced Options"
     visible:
       not:
-        - ${use_free_tier}
+        - ${enable_free_tier}
     variables:
-      - adb_cpu_core_count
-      - adb_storage_tb
-      - adb_auto_scaling
-      - adb_backup_retention_days
-
-  - title: "Advanced Options"
-    visible: true
-    variables:
-      - enable_web_ports
-      - adb_version
-      - adb_license_model
-      - adb_workload
+      - database_version
+      - database_workload
+      - license_model
 
 # Variable Definitions
 variables:
-  # Required Configuration
+  # ===================================================================
+  # REQUIRED CONFIGURATION
+  # ===================================================================
+  
   compartment_id:
     type: oci:identity:compartment:id
     title: "Compartment"
-    description: "Choose the compartment where all resources will be created"
+    description: "Select the compartment where all resources will be created"
     required: true
 
   ssh_public_key:
     type: oci:core:ssh:publickey
     title: "SSH Public Key"
-    description: "Paste your SSH public key to access the compute instance"
+    description: "Your SSH public key to access the compute instance"
     required: true
     additionalProps:
       allowMultiple: false
@@ -68,23 +70,30 @@ variables:
   db_admin_password:
     type: password
     title: "Database Admin Password"
-    description: "Password for the ADMIN user (8+ characters, include uppercase, lowercase, number)"
+    description: "Password for the database ADMIN user (8+ characters, include uppercase, lowercase, number)"
     required: true
     minLength: 8
     maxLength: 30
     pattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).*$"
 
-  # Deployment Options
-  use_free_tier:
+  # ===================================================================
+  # DEPLOYMENT MODE
+  # ===================================================================
+
+  enable_free_tier:
     type: boolean
-    title: "Use Always Free Tier"
-    description: "Enable to use Always Free resources (recommended for development)"
+    title: "✅ Enable Always Free Tier"
+    description: "Keep this CHECKED for free development environment. Uncheck only for production with billing."
     default: true
+
+  # ===================================================================
+  # BASIC SETTINGS
+  # ===================================================================
 
   resource_prefix:
     type: string
     title: "Resource Name Prefix"
-    description: "Prefix for all resource names"
+    description: "Prefix for all resource names (optional)"
     default: "python-oracle"
     pattern: "^[a-zA-Z][a-zA-Z0-9-]*$"
     maxLength: 20
@@ -92,16 +101,25 @@ variables:
   db_name:
     type: string
     title: "Database Name"
-    description: "Name for the Autonomous Database (alphanumeric only, max 14 characters)"
+    description: "Name for the Autonomous Database"
     default: "PYTHONADB"
     pattern: "^[A-Za-z][A-Za-z0-9]*$"
     maxLength: 14
 
-  # Compute Configuration (Paid Tier)
-  instance_shape:
+  enable_web_access:
+    type: boolean
+    title: "Enable Web Ports"
+    description: "Open HTTP (80) and HTTPS (443) ports for web applications"
+    default: false
+
+  # ===================================================================
+  # PAID TIER CONFIGURATION (Only visible when free tier is disabled)
+  # ===================================================================
+
+  compute_shape:
     type: enum
-    title: "Instance Shape"
-    description: "Compute instance shape for paid tier"
+    title: "Compute Instance Shape"
+    description: "Instance type for compute resources"
     default: "VM.Standard.E4.Flex"
     enum:
       - "VM.Standard.E3.Flex"
@@ -109,32 +127,31 @@ variables:
       - "VM.Standard.A1.Flex"
       - "VM.Standard3.Flex"
 
-  instance_ocpus:
+  compute_ocpus:
     type: number
-    title: "Instance OCPUs"
+    title: "Compute OCPUs"
     description: "Number of OCPUs for the compute instance"
     default: 2
     minimum: 1
     maximum: 64
 
-  instance_memory_gb:
+  compute_memory_gb:
     type: number
-    title: "Instance Memory (GB)"
+    title: "Compute Memory (GB)"
     description: "Amount of memory in GB"
     default: 16
     minimum: 1
     maximum: 1024
 
-  # Database Configuration (Paid Tier)
-  adb_cpu_core_count:
+  database_ocpus:
     type: number
-    title: "Database CPU Cores"
-    description: "Number of CPU cores for Autonomous Database"
+    title: "Database OCPUs"
+    description: "Number of OCPUs for Autonomous Database"
     default: 2
     minimum: 1
     maximum: 128
 
-  adb_storage_tb:
+  database_storage_tb:
     type: number
     title: "Database Storage (TB)"
     description: "Storage size in terabytes"
@@ -142,28 +159,17 @@ variables:
     minimum: 1
     maximum: 384
 
-  adb_auto_scaling:
+  enable_auto_scaling:
     type: boolean
     title: "Enable Auto Scaling"
-    description: "Automatically scale CPU based on workload"
+    description: "Automatically scale database CPU based on workload"
     default: false
 
-  adb_backup_retention_days:
-    type: number
-    title: "Backup Retention (Days)"
-    description: "Number of days to retain automatic backups"
-    default: 7
-    minimum: 1
-    maximum: 60
+  # ===================================================================
+  # ADVANCED OPTIONS
+  # ===================================================================
 
-  # Advanced Options
-  enable_web_ports:
-    type: boolean
-    title: "Enable Web Ports"
-    description: "Open HTTP (80) and HTTPS (443) ports for web applications"
-    default: false
-
-  adb_version:
+  database_version:
     type: enum
     title: "Database Version"
     description: "Oracle Database version"
@@ -173,7 +179,17 @@ variables:
       - "21c"
       - "23ai"
 
-  adb_license_model:
+  database_workload:
+    type: enum
+    title: "Database Workload Type"
+    description: "Type of database workload"
+    default: "OLTP"
+    enum:
+      - "OLTP"
+      - "DW"
+      - "AJD"
+
+  license_model:
     type: enum
     title: "License Model"
     description: "Database license model"
@@ -182,30 +198,20 @@ variables:
       - "LICENSE_INCLUDED"
       - "BRING_YOUR_OWN_LICENSE"
 
-  adb_workload:
-    type: enum
-    title: "Workload Type"
-    description: "Type of database workload"
-    default: "OLTP"
-    enum:
-      - "OLTP"
-      - "DW"
-      - "AJD"
-
-# Output Groups
+# Output Groups for organized results
 outputGroups:
-  - title: "Connection Information"
+  - title: "🔗 Connection Information"
     outputs:
       - instance_public_ip
       - ssh_connection_command
       - database_connection_strings
 
-  - title: "Resource Details"
+  - title: "📊 Deployment Summary"
     outputs:
-      - deployment_mode
-      - resource_summary
-      - autonomous_database_id
+      - deployment_tier
+      - resource_configuration
+      - estimated_monthly_cost
 
-  - title: "Getting Started"
+  - title: "🚀 Next Steps"
     outputs:
-      - quick_start_instructions
+      - setup_instructions

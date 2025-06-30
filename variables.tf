@@ -1,4 +1,7 @@
-# Core Configuration
+# ===================================================================
+# REQUIRED CONFIGURATION (Always needed)
+# ===================================================================
+
 variable "compartment_id" {
   description = "The compartment OCID where resources will be created"
   type        = string
@@ -19,14 +22,20 @@ variable "db_admin_password" {
   }
 }
 
-# Deployment Mode Toggle
-variable "use_free_tier" {
-  description = "Use Always Free tier resources (true) or paid tier (false)"
+# ===================================================================
+# DEPLOYMENT MODE (Default: Always Free)
+# ===================================================================
+
+variable "enable_free_tier" {
+  description = "Use Always Free tier resources (recommended for development)"
   type        = bool
   default     = true
 }
 
-# Resource Naming
+# ===================================================================
+# BASIC SETTINGS (Optional customization)
+# ===================================================================
+
 variable "resource_prefix" {
   description = "Prefix for all resource names"
   type        = string
@@ -43,100 +52,108 @@ variable "db_name" {
   }
 }
 
-# Compute Instance Configuration (Paid Tier Only)
-variable "instance_shape" {
-  description = "Instance shape for paid tier"
-  type        = string
-  default     = "VM.Standard.E4.Flex"
+variable "enable_web_access" {
+  description = "Enable HTTP (80) and HTTPS (443) ports for web applications"
+  type        = bool
+  default     = false
 }
 
-variable "instance_ocpus" {
-  description = "Number of OCPUs for flex instance (paid tier only)"
-  type        = number
-  default     = 2
+# ===================================================================
+# PAID TIER CONFIGURATION
+# (Only used when enable_free_tier = false)
+# ===================================================================
+
+variable "compute_shape" {
+  description = "Compute instance shape (only for paid tier)"
+  type        = string
+  default     = "VM.Standard.E4.Flex"
   validation {
-    condition     = var.instance_ocpus >= 1 && var.instance_ocpus <= 64
-    error_message = "Instance OCPUs must be between 1 and 64."
+    condition = contains([
+      "VM.Standard.E3.Flex",
+      "VM.Standard.E4.Flex", 
+      "VM.Standard.A1.Flex",
+      "VM.Standard3.Flex"
+    ], var.compute_shape)
+    error_message = "Must be a valid Flex shape."
   }
 }
 
-variable "instance_memory_gb" {
-  description = "Amount of memory in GB for flex instance (paid tier only)"
+variable "compute_ocpus" {
+  description = "Number of OCPUs for compute instance (only for paid tier)"
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.compute_ocpus >= 1 && var.compute_ocpus <= 64
+    error_message = "OCPUs must be between 1 and 64."
+  }
+}
+
+variable "compute_memory_gb" {
+  description = "Memory in GB for compute instance (only for paid tier)"
   type        = number
   default     = 16
   validation {
-    condition     = var.instance_memory_gb >= 1 && var.instance_memory_gb <= 1024
-    error_message = "Instance memory must be between 1 and 1024 GB."
+    condition     = var.compute_memory_gb >= 1 && var.compute_memory_gb <= 1024
+    error_message = "Memory must be between 1 and 1024 GB."
   }
 }
 
-# Autonomous Database Configuration (Paid Tier Only)
-variable "adb_cpu_core_count" {
-  description = "Number of CPU cores for ADB (paid tier only)"
+variable "database_ocpus" {
+  description = "Number of OCPUs for Autonomous Database (only for paid tier)"
   type        = number
   default     = 2
   validation {
-    condition     = var.adb_cpu_core_count >= 1 && var.adb_cpu_core_count <= 128
-    error_message = "ADB CPU core count must be between 1 and 128."
+    condition     = var.database_ocpus >= 1 && var.database_ocpus <= 128
+    error_message = "Database OCPUs must be between 1 and 128."
   }
 }
 
-variable "adb_storage_tb" {
-  description = "Storage size in TB for ADB (paid tier only)"
+variable "database_storage_tb" {
+  description = "Database storage in TB (only for paid tier)"
   type        = number
   default     = 1
   validation {
-    condition     = var.adb_storage_tb >= 1 && var.adb_storage_tb <= 384
-    error_message = "ADB storage must be between 1 and 384 TB."
+    condition     = var.database_storage_tb >= 1 && var.database_storage_tb <= 384
+    error_message = "Database storage must be between 1 and 384 TB."
   }
 }
 
-variable "adb_auto_scaling" {
-  description = "Enable auto-scaling for ADB (paid tier only)"
+variable "enable_auto_scaling" {
+  description = "Enable database auto-scaling (only for paid tier)"
   type        = bool
   default     = false
 }
 
-variable "adb_backup_retention_days" {
-  description = "Backup retention period in days (paid tier only)"
-  type        = number
-  default     = 7
-  validation {
-    condition     = var.adb_backup_retention_days >= 1 && var.adb_backup_retention_days <= 60
-    error_message = "Backup retention must be between 1 and 60 days."
-  }
-}
+# ===================================================================
+# ADVANCED OPTIONS (Rarely changed)
+# ===================================================================
 
-# Database Configuration
-variable "adb_version" {
-  description = "Autonomous Database version"
+variable "database_version" {
+  description = "Oracle Database version"
   type        = string
   default     = "19c"
-}
-
-variable "adb_license_model" {
-  description = "License model for ADB"
-  type        = string
-  default     = "LICENSE_INCLUDED"
   validation {
-    condition     = contains(["LICENSE_INCLUDED", "BRING_YOUR_OWN_LICENSE"], var.adb_license_model)
-    error_message = "License model must be either LICENSE_INCLUDED or BRING_YOUR_OWN_LICENSE."
+    condition     = contains(["19c", "21c", "23ai"], var.database_version)
+    error_message = "Version must be 19c, 21c, or 23ai."
   }
 }
 
-variable "adb_workload" {
-  description = "Workload type for ADB"
+variable "database_workload" {
+  description = "Database workload type"
   type        = string
   default     = "OLTP"
   validation {
-    condition     = contains(["OLTP", "DW", "AJD"], var.adb_workload)
-    error_message = "Workload must be OLTP, DW, or AJD."
+    condition     = contains(["OLTP", "DW", "AJD"], var.database_workload)
+    error_message = "Workload must be OLTP (transactions), DW (data warehouse), or AJD (JSON)."
   }
 }
 
-# Network Configuration
-variable "enable_web_ports" {
-  description = "Enable HTTP (80) and HTTPS (443) ports"
-  type        = bool
-  default     = false
+variable "license_model" {
+  description = "Database license model"
+  type        = string
+  default     = "LICENSE_INCLUDED"
+  validation {
+    condition     = contains(["LICENSE_INCLUDED", "BRING_YOUR_OWN_LICENSE"], var.license_model)
+    error_message = "License model must be LICENSE_INCLUDED or BRING_YOUR_OWN_LICENSE."
+  }
 }

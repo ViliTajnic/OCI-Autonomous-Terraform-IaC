@@ -7,7 +7,7 @@ terraform {
   }
 }
 
-# Data sources for availability domain and compute images
+# Data sources
 data "oci_identity_availability_domain" "ad" {
   compartment_id = var.compartment_id
   ad_number      = 1
@@ -17,9 +17,23 @@ data "oci_core_images" "compute_images" {
   compartment_id           = var.compartment_id
   operating_system         = "Oracle Linux"
   operating_system_version = "8"
-  shape                    = var.use_free_tier ? "VM.Standard.E2.1.Micro" : var.instance_shape
+  shape                    = local.instance_shape
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
+}
+
+# Local values for conditional logic
+locals {
+  # Always Free tier configurations
+  free_tier_compute_shape = "VM.Standard.E2.1.Micro"
+  free_tier_db_ocpus      = 1
+
+  # Determine actual values based on free tier setting
+  instance_shape = var.enable_free_tier ? local.free_tier_compute_shape : var.compute_shape
+  database_ocpus = var.enable_free_tier ? local.free_tier_db_ocpus : var.database_ocpus
+  
+  # Auto-scaling only available for paid tier
+  auto_scaling_enabled = var.enable_free_tier ? false : var.enable_auto_scaling
 }
 
 # VCN
@@ -28,6 +42,11 @@ resource "oci_core_vcn" "vcn" {
   display_name   = "${var.resource_prefix}-vcn"
   cidr_block     = "10.0.0.0/16"
   dns_label      = "pythonvcn"
+
+  freeform_tags = {
+    "Environment" = var.enable_free_tier ? "Development" : "Production"
+    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
+  }
 }
 
 # Internet Gateway
@@ -37,7 +56,7 @@ resource "oci_core_internet_gateway" "ig" {
   display_name   = "${var.resource_prefix}-ig"
 }
 
-# Route table for public subnet
+# Route table
 resource "oci_core_route_table" "public_rt" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.vcn.id
@@ -49,17 +68,19 @@ resource "oci_core_route_table" "public_rt" {
   }
 }
 
-# Security list for public subnet
+# Security list
 resource "oci_core_security_list" "public_sl" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.vcn.id
   display_name   = "${var.resource_prefix}-public-sl"
 
+  # Outbound traffic
   egress_security_rules {
     destination = "0.0.0.0/0"
     protocol    = "all"
   }
 
+  # SSH access
   ingress_security_rules {
     protocol = "6" # TCP
     source   = "0.0.0.0/0"
@@ -69,8 +90,9 @@ resource "oci_core_security_list" "public_sl" {
     }
   }
 
+  # HTTP access (optional)
   dynamic "ingress_security_rules" {
-    for_each = var.enable_web_ports ? [1] : []
+    for_each = var.enable_web_access ? [1] : []
     content {
       protocol = "6" # TCP
       source   = "0.0.0.0/0"
@@ -81,8 +103,9 @@ resource "oci_core_security_list" "public_sl" {
     }
   }
 
+  # HTTPS access (optional)
   dynamic "ingress_security_rules" {
-    for_each = var.enable_web_ports ? [1] : []
+    for_each = var.enable_web_access ? [1] : []
     content {
       protocol = "6" # TCP
       source   = "0.0.0.0/0"
@@ -96,13 +119,13 @@ resource "oci_core_security_list" "public_sl" {
 
 # Public subnet
 resource "oci_core_subnet" "public_subnet" {
-  compartment_id      = var.compartment_id
-  vcn_id              = oci_core_vcn.vcn.id
-  display_name        = "${var.resource_prefix}-public-subnet"
-  cidr_block          = "10.0.1.0/24"
-  dns_label           = "publicsubnet"
-  route_table_id      = oci_core_route_table.public_rt.id
-  security_list_ids   = [oci_core_security_list.public_sl.id]
+  compartment_id             = var.compartment_id
+  vcn_id                     = oci_core_vcn.vcn.id
+  display_name               = "${var.resource_prefix}-public-subnet"
+  cidr_block                 = "10.0.1.0/24"
+  dns_label                  = "publicsubnet"
+  route_table_id             = oci_core_route_table.public_rt.id
+  security_list_ids          = [oci_core_security_list.public_sl.id]
   prohibit_public_ip_on_vnic = false
 }
 
@@ -111,13 +134,14 @@ resource "oci_core_instance" "compute_instance" {
   availability_domain = data.oci_identity_availability_domain.ad.name
   compartment_id      = var.compartment_id
   display_name        = "${var.resource_prefix}-instance"
-  shape               = var.use_free_tier ? "VM.Standard.E2.1.Micro" : var.instance_shape
+  shape               = local.instance_shape
 
+  # Shape configuration (only for paid tier Flex shapes)
   dynamic "shape_config" {
-    for_each = var.use_free_tier ? [] : [1]
+    for_each = var.enable_free_tier ? [] : [1]
     content {
-      ocpus         = var.instance_ocpus
-      memory_in_gbs = var.instance_memory_gb
+      ocpus         = var.compute_ocpus
+      memory_in_gbs = var.compute_memory_gb
     }
   }
 
@@ -139,25 +163,43 @@ resource "oci_core_instance" "compute_instance" {
       db_password = var.db_admin_password
     }))
   }
+
+  freeform_tags = {
+    "Environment" = var.enable_free_tier ? "Development" : "Production"
+    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
+    "Shape"       = local.instance_shape
+  }
 }
 
 # Autonomous Database
 resource "oci_database_autonomous_database" "adb" {
-  compartment_id           = var.compartment_id
-  cpu_core_count           = var.use_free_tier ? 1 : var.adb_cpu_core_count
-  data_storage_size_in_tbs = var.use_free_tier ? null : var.adb_storage_tb
-  data_storage_size_in_gbs = var.use_free_tier ? 20 : null
-  db_name                  = var.db_name
-  admin_password           = var.db_admin_password
-  db_version               = var.adb_version
-  display_name             = "${var.resource_prefix}-adb"
-  license_model            = var.adb_license_model
-  is_free_tier             = var.use_free_tier
-  db_workload              = var.adb_workload
+  compartment_id = var.compartment_id
   
-  # Auto-scaling (only for paid tier)
-  is_auto_scaling_enabled = var.use_free_tier ? false : var.adb_auto_scaling
+  # Core configuration
+  cpu_core_count = local.database_ocpus
   
-  # Backup retention (only for paid tier)
-  backup_retention_period_in_days = var.use_free_tier ? null : var.adb_backup_retention_days
+  # Storage configuration - use different attributes based on tier
+  data_storage_size_in_gbs = var.enable_free_tier ? 20 : null
+  data_storage_size_in_tbs = var.enable_free_tier ? null : var.database_storage_tb
+  
+  db_name        = var.db_name
+  admin_password = var.db_admin_password
+  display_name   = "${var.resource_prefix}-adb"
+  
+  # Database settings
+  db_version    = var.database_version
+  db_workload   = var.database_workload
+  license_model = var.license_model
+  
+  # Free tier setting
+  is_free_tier = var.enable_free_tier
+  
+  # Paid tier features (disabled for free tier)
+  is_auto_scaling_enabled = local.auto_scaling_enabled
+
+  freeform_tags = {
+    "Environment" = var.enable_free_tier ? "Development" : "Production"
+    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
+    "Workload"    = var.database_workload
+  }
 }
