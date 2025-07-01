@@ -7,18 +7,19 @@ terraform {
   }
 }
 
-# Use current compartment automatically
-data "oci_identity_compartment" "current" {
-  # This will use the compartment from the current context/session
+# Get current compartment from the execution context
+locals {
+  # In OCI Resource Manager, the compartment_ocid is automatically available
+  current_compartment_id = var.compartment_ocid
 }
 
 data "oci_identity_availability_domain" "ad" {
-  compartment_id = data.oci_identity_compartment.current.id
+  compartment_id = local.current_compartment_id
   ad_number      = 1
 }
 
 data "oci_core_images" "compute_images" {
-  compartment_id           = data.oci_identity_compartment.current.id
+  compartment_id           = local.current_compartment_id
   operating_system         = "Oracle Linux"
   operating_system_version = "8"
   shape                    = local.instance_shape
@@ -42,7 +43,7 @@ locals {
 
 # VCN
 resource "oci_core_vcn" "vcn" {
-  compartment_id = data.oci_identity_compartment.current.id
+  compartment_id = local.current_compartment_id
   display_name   = "${var.resource_prefix}-vcn"
   cidr_block     = "10.0.0.0/16"
   dns_label      = "pythonvcn"
@@ -55,14 +56,14 @@ resource "oci_core_vcn" "vcn" {
 
 # Internet Gateway
 resource "oci_core_internet_gateway" "ig" {
-  compartment_id = data.oci_identity_compartment.current.id
+  compartment_id = local.current_compartment_id
   vcn_id         = oci_core_vcn.vcn.id
   display_name   = "${var.resource_prefix}-ig"
 }
 
 # Route table
 resource "oci_core_route_table" "public_rt" {
-  compartment_id = data.oci_identity_compartment.current.id
+  compartment_id = local.current_compartment_id
   vcn_id         = oci_core_vcn.vcn.id
   display_name   = "${var.resource_prefix}-public-rt"
 
@@ -74,7 +75,7 @@ resource "oci_core_route_table" "public_rt" {
 
 # Security list
 resource "oci_core_security_list" "public_sl" {
-  compartment_id = data.oci_identity_compartment.current.id
+  compartment_id = local.current_compartment_id
   vcn_id         = oci_core_vcn.vcn.id
   display_name   = "${var.resource_prefix}-public-sl"
 
@@ -137,7 +138,7 @@ resource "oci_core_security_list" "public_sl" {
 
 # Public subnet
 resource "oci_core_subnet" "public_subnet" {
-  compartment_id             = data.oci_identity_compartment.current.id
+  compartment_id             = local.current_compartment_id
   vcn_id                     = oci_core_vcn.vcn.id
   display_name               = "${var.resource_prefix}-public-subnet"
   cidr_block                 = "10.0.1.0/24"
@@ -150,7 +151,7 @@ resource "oci_core_subnet" "public_subnet" {
 # Compute instance
 resource "oci_core_instance" "compute_instance" {
   availability_domain = data.oci_identity_availability_domain.ad.name
-  compartment_id      = data.oci_identity_compartment.current.id
+  compartment_id      = local.current_compartment_id
   display_name        = "${var.resource_prefix}-instance"
   shape               = local.instance_shape
 
@@ -191,7 +192,7 @@ resource "oci_core_instance" "compute_instance" {
 
 # Autonomous Database
 resource "oci_database_autonomous_database" "adb" {
-  compartment_id = data.oci_identity_compartment.current.id
+  compartment_id = local.current_compartment_id
   
   # Core configuration
   cpu_core_count = local.database_ocpus

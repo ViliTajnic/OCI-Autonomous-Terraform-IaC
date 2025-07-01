@@ -1,5 +1,27 @@
 # ===================================================================
-# REQUIRED CONFIGURATION (Minimal setup)
+# AUTOMATICALLY PROVIDED VARIABLES (No user input needed)
+# ===================================================================
+
+variable "compartment_ocid" {
+  description = "Compartment OCID (automatically provided by OCI Resource Manager)"
+  type        = string
+  default     = ""
+}
+
+variable "tenancy_ocid" {
+  description = "Tenancy OCID (automatically provided by OCI Resource Manager)"
+  type        = string
+  default     = ""
+}
+
+variable "region" {
+  description = "Region (automatically provided by OCI Resource Manager)"
+  type        = string
+  default     = ""
+}
+
+# ===================================================================
+# REQUIRED CONFIGURATION (Only 2 inputs needed!)
 # ===================================================================
 
 variable "ssh_public_key" {
