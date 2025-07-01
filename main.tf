@@ -179,7 +179,7 @@ resource "oci_database_autonomous_database" "adb" {
   cpu_core_count = local.database_ocpus
   
   # Storage configuration - use different attributes based on tier
-  data_storage_size_in_gbs = var.enable_free_tier ? 20 : null
+  data_storage_size_in_gb = var.enable_free_tier ? 20 : null
   data_storage_size_in_tbs = var.enable_free_tier ? null : var.database_storage_tb
   
   db_name        = var.db_name
