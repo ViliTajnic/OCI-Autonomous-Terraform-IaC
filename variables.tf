@@ -1,18 +1,6 @@
 # ===================================================================
-# REQUIRED CONFIGURATION (Always needed)
+# REQUIRED CONFIGURATION (Minimal setup)
 # ===================================================================
-
-variable "tenancy_ocid" {
-  description = "The tenancy OCID (automatically provided in OCI Resource Manager)"
-  type        = string
-  default     = ""
-}
-
-variable "compartment_id" {
-  description = "The compartment OCID where resources will be created (use current compartment)"
-  type        = string
-  default     = ""
-}
 
 variable "ssh_public_key" {
   description = "SSH public key for instance access"

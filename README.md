@@ -315,5 +315,3 @@ Happy coding with Oracle Autonomous Database and python-oracledb! 🚀
 - **Enhanced Performance**: Optimized for better performance and resource usage
 - **Future-Proof**: Actively maintained and updated by Oracle
 - **Easy Migration**: Drop-in replacement for most cx_Oracle applications
-
-oci limits quota list --compartment-id ocid1.compartment.oc1..aaaaaaaar5h7zop2voajayl3ww7vja7yeta664vxgyk2h7jkbf32cqm55qpq

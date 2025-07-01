@@ -7,22 +7,18 @@ terraform {
   }
 }
 
-# Data sources
-data "oci_identity_tenancy" "tenancy" {
-  tenancy_id = var.tenancy_ocid
-}
-
+# Use current compartment automatically
 data "oci_identity_compartment" "current" {
-  id = var.compartment_id
+  # This will use the compartment from the current context/session
 }
 
 data "oci_identity_availability_domain" "ad" {
-  compartment_id = var.compartment_id
+  compartment_id = data.oci_identity_compartment.current.id
   ad_number      = 1
 }
 
 data "oci_core_images" "compute_images" {
-  compartment_id           = var.compartment_id
+  compartment_id           = data.oci_identity_compartment.current.id
   operating_system         = "Oracle Linux"
   operating_system_version = "8"
   shape                    = local.instance_shape
@@ -46,7 +42,7 @@ locals {
 
 # VCN
 resource "oci_core_vcn" "vcn" {
-  compartment_id = var.compartment_id
+  compartment_id = data.oci_identity_compartment.current.id
   display_name   = "${var.resource_prefix}-vcn"
   cidr_block     = "10.0.0.0/16"
   dns_label      = "pythonvcn"
@@ -59,14 +55,14 @@ resource "oci_core_vcn" "vcn" {
 
 # Internet Gateway
 resource "oci_core_internet_gateway" "ig" {
-  compartment_id = var.compartment_id
+  compartment_id = data.oci_identity_compartment.current.id
   vcn_id         = oci_core_vcn.vcn.id
   display_name   = "${var.resource_prefix}-ig"
 }
 
 # Route table
 resource "oci_core_route_table" "public_rt" {
-  compartment_id = var.compartment_id
+  compartment_id = data.oci_identity_compartment.current.id
   vcn_id         = oci_core_vcn.vcn.id
   display_name   = "${var.resource_prefix}-public-rt"
 
@@ -78,7 +74,7 @@ resource "oci_core_route_table" "public_rt" {
 
 # Security list
 resource "oci_core_security_list" "public_sl" {
-  compartment_id = var.compartment_id
+  compartment_id = data.oci_identity_compartment.current.id
   vcn_id         = oci_core_vcn.vcn.id
   display_name   = "${var.resource_prefix}-public-sl"
 
@@ -141,7 +137,7 @@ resource "oci_core_security_list" "public_sl" {
 
 # Public subnet
 resource "oci_core_subnet" "public_subnet" {
-  compartment_id             = var.compartment_id
+  compartment_id             = data.oci_identity_compartment.current.id
   vcn_id                     = oci_core_vcn.vcn.id
   display_name               = "${var.resource_prefix}-public-subnet"
   cidr_block                 = "10.0.1.0/24"
@@ -154,7 +150,7 @@ resource "oci_core_subnet" "public_subnet" {
 # Compute instance
 resource "oci_core_instance" "compute_instance" {
   availability_domain = data.oci_identity_availability_domain.ad.name
-  compartment_id      = var.compartment_id
+  compartment_id      = data.oci_identity_compartment.current.id
   display_name        = "${var.resource_prefix}-instance"
   shape               = local.instance_shape
 
@@ -195,7 +191,7 @@ resource "oci_core_instance" "compute_instance" {
 
 # Autonomous Database
 resource "oci_database_autonomous_database" "adb" {
-  compartment_id = var.compartment_id
+  compartment_id = data.oci_identity_compartment.current.id
   
   # Core configuration
   cpu_core_count = local.database_ocpus
@@ -221,21 +217,11 @@ resource "oci_database_autonomous_database" "adb" {
   
   # Enhanced security and networking
   subnet_id                = oci_core_subnet.public_subnet.id
-  nsg_ids                  = []
   whitelisted_ips          = ["0.0.0.0/0"]
   are_primary_whitelisted_ips_used = true
   
   # Additional configuration for stability
   is_dedicated = false
-  
-  # Backup configuration (paid tier only)
-  dynamic "backup_config" {
-    for_each = var.enable_free_tier ? [] : [1]
-    content {
-      manual_backup_bucket_name = null
-      manual_backup_type       = "NONE"
-    }
-  }
 
   freeform_tags = {
     "Environment" = var.enable_free_tier ? "Development" : "Production"
@@ -245,12 +231,10 @@ resource "oci_database_autonomous_database" "adb" {
     "CreatedBy"   = "Terraform"
   }
   
-  # Lifecycle management
+  # Lifecycle management - only ignore defined_tags
   lifecycle {
     ignore_changes = [
-      # Ignore changes to these attributes to prevent drift
-      defined_tags,
-      system_tags
+      defined_tags
     ]
   }
 }

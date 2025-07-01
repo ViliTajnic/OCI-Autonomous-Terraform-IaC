@@ -173,7 +173,7 @@ variables:
     type: enum
     title: "Database Version"
     description: "Oracle Database version"
-    default: "19c"
+    default: "23ai"
     enum:
       - "19c"
       - "21c"

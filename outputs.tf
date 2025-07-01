@@ -88,6 +88,10 @@ output "setup_instructions" {
      • connection_example.py - Basic connection template  
      • flask_example.py - Web application example
   
+  📍 DEPLOYMENT LOCATION:
+     • Compartment: ${data.oci_identity_compartment.current.name}
+     • Region: ${data.oci_identity_compartment.current.compartment_id}
+  
   ${var.enable_free_tier ? "✅ FREE TIER: No charges for this deployment!" : "💰 PAID TIER: Monitor usage in OCI Console"}
   EOT
 }
@@ -99,6 +103,8 @@ output "setup_instructions" {
 output "resource_ids" {
   description = "OCIDs of created resources"
   value = {
+    compartment_id         = data.oci_identity_compartment.current.id
+    compartment_name       = data.oci_identity_compartment.current.name
     vcn_id                 = oci_core_vcn.vcn.id
     subnet_id              = oci_core_subnet.public_subnet.id
     instance_id            = oci_core_instance.compute_instance.id
