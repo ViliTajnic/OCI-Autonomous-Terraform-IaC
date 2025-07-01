@@ -2,9 +2,16 @@
 # REQUIRED CONFIGURATION (Always needed)
 # ===================================================================
 
-variable "compartment_id" {
-  description = "The compartment OCID where resources will be created"
+variable "tenancy_ocid" {
+  description = "The tenancy OCID (automatically provided in OCI Resource Manager)"
   type        = string
+  default     = ""
+}
+
+variable "compartment_id" {
+  description = "The compartment OCID where resources will be created (use current compartment)"
+  type        = string
+  default     = ""
 }
 
 variable "ssh_public_key" {
@@ -53,9 +60,9 @@ variable "db_name" {
 }
 
 variable "enable_web_access" {
-  description = "Enable HTTP (80) and HTTPS (443) ports for web applications"
+  description = "Enable HTTP (80) and HTTPS (443) ports for web applications (always enabled)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 # ===================================================================
@@ -129,12 +136,12 @@ variable "enable_auto_scaling" {
 # ===================================================================
 
 variable "database_version" {
-  description = "Oracle Database version"
+  description = "Oracle Database version (fixed to 23ai)"
   type        = string
-  default     = "19c"
+  default     = "23ai"
   validation {
-    condition     = contains(["19c", "21c", "23ai"], var.database_version)
-    error_message = "Version must be 19c, 21c, or 23ai."
+    condition     = var.database_version == "23ai"
+    error_message = "Database version must be 23ai."
   }
 }
 

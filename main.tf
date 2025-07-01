@@ -8,6 +8,14 @@ terraform {
 }
 
 # Data sources
+data "oci_identity_tenancy" "tenancy" {
+  tenancy_id = var.tenancy_ocid
+}
+
+data "oci_identity_compartment" "current" {
+  id = var.compartment_id
+}
+
 data "oci_identity_availability_domain" "ad" {
   compartment_id = var.compartment_id
   ad_number      = 1
@@ -90,29 +98,43 @@ resource "oci_core_security_list" "public_sl" {
     }
   }
 
-  # HTTP access (optional)
-  dynamic "ingress_security_rules" {
-    for_each = var.enable_web_access ? [1] : []
-    content {
-      protocol = "6" # TCP
-      source   = "0.0.0.0/0"
-      tcp_options {
-        min = 80
-        max = 80
-      }
+  # HTTP access (always enabled)
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 80
+      max = 80
     }
   }
 
-  # HTTPS access (optional)
-  dynamic "ingress_security_rules" {
-    for_each = var.enable_web_access ? [1] : []
-    content {
-      protocol = "6" # TCP
-      source   = "0.0.0.0/0"
-      tcp_options {
-        min = 443
-        max = 443
-      }
+  # HTTPS access (always enabled)
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 443
+      max = 443
+    }
+  }
+
+  # Flask development port
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 5000
+      max = 5000
+    }
+  }
+
+  # Jupyter notebook port
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 8888
+      max = 8888
     }
   }
 }
@@ -186,8 +208,8 @@ resource "oci_database_autonomous_database" "adb" {
   admin_password = var.db_admin_password
   display_name   = "${var.resource_prefix}-adb"
   
-  # Database settings
-  db_version    = var.database_version
+  # Database settings - Force 23ai version
+  db_version    = "23ai"
   db_workload   = var.database_workload
   license_model = var.license_model
   
@@ -196,10 +218,39 @@ resource "oci_database_autonomous_database" "adb" {
   
   # Paid tier features (disabled for free tier)
   is_auto_scaling_enabled = local.auto_scaling_enabled
+  
+  # Enhanced security and networking
+  subnet_id                = oci_core_subnet.public_subnet.id
+  nsg_ids                  = []
+  whitelisted_ips          = ["0.0.0.0/0"]
+  are_primary_whitelisted_ips_used = true
+  
+  # Additional configuration for stability
+  is_dedicated = false
+  
+  # Backup configuration (paid tier only)
+  dynamic "backup_config" {
+    for_each = var.enable_free_tier ? [] : [1]
+    content {
+      manual_backup_bucket_name = null
+      manual_backup_type       = "NONE"
+    }
+  }
 
   freeform_tags = {
     "Environment" = var.enable_free_tier ? "Development" : "Production"
     "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
     "Workload"    = var.database_workload
+    "Version"     = "23ai"
+    "CreatedBy"   = "Terraform"
+  }
+  
+  # Lifecycle management
+  lifecycle {
+    ignore_changes = [
+      # Ignore changes to these attributes to prevent drift
+      defined_tags,
+      system_tags
+    ]
   }
 }
