@@ -8,8 +8,9 @@ terraform {
 }
 
 # Get current compartment from the execution context
+# OCI Resource Manager automatically provides compartment_ocid
 locals {
-  # In OCI Resource Manager, the compartment_ocid is automatically available
+  # Use the compartment where the stack is being executed
   current_compartment_id = var.compartment_ocid
 }
 

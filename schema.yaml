@@ -1,217 +1,242 @@
-title: "Oracle Autonomous Database + Python Stack"
-description: "Deploy Oracle Autonomous Database with Python environment. Always Free tier by default."
-informationalText: "✅ Always Free tier is enabled by default (perfect for development). Uncheck 'Enable Free Tier' only if you need production resources and understand billing implications."
-schemaVersion: 1.1.0
-version: "2.0"
-locale: "en"
+# Configure the Oracle Cloud Infrastructure Provider
+terraform {
+  required_providers {
+    oci = {
+      source = "oracle/oci"
+    }
+  }
+}
 
-# Variable Groups for better UI organization
-variableGroups:
-  - title: "🔧 Required Configuration"
-    visible: true
-    variables:
-      - compartment_id
-      - ssh_public_key
-      - db_admin_password
+# Get current compartment from the execution context
+# OCI Resource Manager automatically provides compartment_ocid
+locals {
+  # Use the compartment where the stack is being executed
+  current_compartment_id = var.compartment_ocid
+}
 
-  - title: "⚡ Deployment Mode"
-    visible: true
-    variables:
-      - enable_free_tier
+data "oci_identity_availability_domain" "ad" {
+  compartment_id = local.current_compartment_id
+  ad_number      = 1
+}
 
-  - title: "📝 Basic Settings (Optional)"
-    visible: true
-    variables:
-      - resource_prefix
-      - db_name
-      - enable_web_access
+data "oci_core_images" "compute_images" {
+  compartment_id           = local.current_compartment_id
+  operating_system         = "Oracle Linux"
+  operating_system_version = "8"
+  shape                    = local.instance_shape
+  sort_by                  = "TIMECREATED"
+  sort_order               = "DESC"
+}
 
-  - title: "💰 Paid Tier Configuration"
-    visible:
-      not:
-        - ${enable_free_tier}
-    variables:
-      - compute_shape
-      - compute_ocpus
-      - compute_memory_gb
-      - database_ocpus
-      - database_storage_tb
-      - enable_auto_scaling
+# Local values for conditional logic
+locals {
+  # Always Free tier configurations
+  free_tier_compute_shape = "VM.Standard.E2.1.Micro"
+  free_tier_db_ocpus      = 1
 
-  - title: "🔧 Advanced Options"
-    visible:
-      not:
-        - ${enable_free_tier}
-    variables:
-      - database_version
-      - database_workload
-      - license_model
-
-# Variable Definitions
-variables:
-  # ===================================================================
-  # REQUIRED CONFIGURATION
-  # ===================================================================
+  # Determine actual values based on free tier setting
+  instance_shape = var.enable_free_tier ? local.free_tier_compute_shape : var.compute_shape
+  database_ocpus = var.enable_free_tier ? local.free_tier_db_ocpus : var.database_ocpus
   
-  compartment_id:
-    type: oci:identity:compartment:id
-    title: "Compartment"
-    description: "Select the compartment where all resources will be created"
-    required: true
+  # Auto-scaling only available for paid tier
+  auto_scaling_enabled = var.enable_free_tier ? false : var.enable_auto_scaling
+}
 
-  ssh_public_key:
-    type: oci:core:ssh:publickey
-    title: "SSH Public Key"
-    description: "Your SSH public key to access the compute instance"
-    required: true
-    additionalProps:
-      allowMultiple: false
+# VCN
+resource "oci_core_vcn" "vcn" {
+  compartment_id = local.current_compartment_id
+  display_name   = "${var.resource_prefix}-vcn"
+  cidr_block     = "10.0.0.0/16"
+  dns_label      = "pythonvcn"
 
-  db_admin_password:
-    type: password
-    title: "Database Admin Password"
-    description: "Password for the database ADMIN user (8+ characters, include uppercase, lowercase, number)"
-    required: true
-    minLength: 8
-    maxLength: 30
-    pattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).*$"
+  freeform_tags = {
+    "Environment" = var.enable_free_tier ? "Development" : "Production"
+    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
+  }
+}
 
-  # ===================================================================
-  # DEPLOYMENT MODE
-  # ===================================================================
+# Internet Gateway
+resource "oci_core_internet_gateway" "ig" {
+  compartment_id = local.current_compartment_id
+  vcn_id         = oci_core_vcn.vcn.id
+  display_name   = "${var.resource_prefix}-ig"
+}
 
-  enable_free_tier:
-    type: boolean
-    title: "✅ Enable Always Free Tier"
-    description: "Keep this CHECKED for free development environment. Uncheck only for production with billing."
-    default: true
+# Route table
+resource "oci_core_route_table" "public_rt" {
+  compartment_id = local.current_compartment_id
+  vcn_id         = oci_core_vcn.vcn.id
+  display_name   = "${var.resource_prefix}-public-rt"
 
-  # ===================================================================
-  # BASIC SETTINGS
-  # ===================================================================
+  route_rules {
+    destination       = "0.0.0.0/0"
+    network_entity_id = oci_core_internet_gateway.ig.id
+  }
+}
 
-  resource_prefix:
-    type: string
-    title: "Resource Name Prefix"
-    description: "Prefix for all resource names (optional)"
-    default: "python-oracle"
-    pattern: "^[a-zA-Z][a-zA-Z0-9-]*$"
-    maxLength: 20
+# Security list
+resource "oci_core_security_list" "public_sl" {
+  compartment_id = local.current_compartment_id
+  vcn_id         = oci_core_vcn.vcn.id
+  display_name   = "${var.resource_prefix}-public-sl"
 
-  db_name:
-    type: string
-    title: "Database Name"
-    description: "Name for the Autonomous Database"
-    default: "PYTHONADB"
-    pattern: "^[A-Za-z][A-Za-z0-9]*$"
-    maxLength: 14
+  # Outbound traffic
+  egress_security_rules {
+    destination = "0.0.0.0/0"
+    protocol    = "all"
+  }
 
-  enable_web_access:
-    type: boolean
-    title: "Enable Web Ports"
-    description: "Open HTTP (80) and HTTPS (443) ports for web applications"
-    default: false
+  # SSH access
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 22
+      max = 22
+    }
+  }
 
-  # ===================================================================
-  # PAID TIER CONFIGURATION (Only visible when free tier is disabled)
-  # ===================================================================
+  # HTTP access (always enabled)
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 80
+      max = 80
+    }
+  }
 
-  compute_shape:
-    type: enum
-    title: "Compute Instance Shape"
-    description: "Instance type for compute resources"
-    default: "VM.Standard.E4.Flex"
-    enum:
-      - "VM.Standard.E3.Flex"
-      - "VM.Standard.E4.Flex"
-      - "VM.Standard.A1.Flex"
-      - "VM.Standard3.Flex"
+  # HTTPS access (always enabled)
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 443
+      max = 443
+    }
+  }
 
-  compute_ocpus:
-    type: number
-    title: "Compute OCPUs"
-    description: "Number of OCPUs for the compute instance"
-    default: 2
-    minimum: 1
-    maximum: 64
+  # Flask development port
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 5000
+      max = 5000
+    }
+  }
 
-  compute_memory_gb:
-    type: number
-    title: "Compute Memory (GB)"
-    description: "Amount of memory in GB"
-    default: 16
-    minimum: 1
-    maximum: 1024
+  # Jupyter notebook port
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 8888
+      max = 8888
+    }
+  }
+}
 
-  database_ocpus:
-    type: number
-    title: "Database OCPUs"
-    description: "Number of OCPUs for Autonomous Database"
-    default: 2
-    minimum: 1
-    maximum: 128
+# Public subnet
+resource "oci_core_subnet" "public_subnet" {
+  compartment_id             = local.current_compartment_id
+  vcn_id                     = oci_core_vcn.vcn.id
+  display_name               = "${var.resource_prefix}-public-subnet"
+  cidr_block                 = "10.0.1.0/24"
+  dns_label                  = "publicsubnet"
+  route_table_id             = oci_core_route_table.public_rt.id
+  security_list_ids          = [oci_core_security_list.public_sl.id]
+  prohibit_public_ip_on_vnic = false
+}
 
-  database_storage_tb:
-    type: number
-    title: "Database Storage (TB)"
-    description: "Storage size in terabytes"
-    default: 1
-    minimum: 1
-    maximum: 384
+# Compute instance
+resource "oci_core_instance" "compute_instance" {
+  availability_domain = data.oci_identity_availability_domain.ad.name
+  compartment_id      = local.current_compartment_id
+  display_name        = "${var.resource_prefix}-instance"
+  shape               = local.instance_shape
 
-  enable_auto_scaling:
-    type: boolean
-    title: "Enable Auto Scaling"
-    description: "Automatically scale database CPU based on workload"
-    default: false
+  # Shape configuration (only for paid tier Flex shapes)
+  dynamic "shape_config" {
+    for_each = var.enable_free_tier ? [] : [1]
+    content {
+      ocpus         = var.compute_ocpus
+      memory_in_gbs = var.compute_memory_gb
+    }
+  }
 
-  # ===================================================================
-  # ADVANCED OPTIONS
-  # ===================================================================
+  create_vnic_details {
+    subnet_id        = oci_core_subnet.public_subnet.id
+    display_name     = "${var.resource_prefix}-vnic"
+    assign_public_ip = true
+    hostname_label   = "pythonhost"
+  }
 
-  database_version:
-    type: enum
-    title: "Database Version"
-    description: "Oracle Database version"
-    default: "23ai"
-    enum:
-      - "19c"
-      - "21c"
-      - "23ai"
+  source_details {
+    source_type = "image"
+    source_id   = data.oci_core_images.compute_images.images[0].id
+  }
 
-  database_workload:
-    type: enum
-    title: "Database Workload Type"
-    description: "Type of database workload"
-    default: "OLTP"
-    enum:
-      - "OLTP"
-      - "DW"
-      - "AJD"
+  metadata = {
+    ssh_authorized_keys = var.ssh_public_key
+    user_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
+      db_password = var.db_admin_password
+    }))
+  }
 
-  license_model:
-    type: enum
-    title: "License Model"
-    description: "Database license model"
-    default: "LICENSE_INCLUDED"
-    enum:
-      - "LICENSE_INCLUDED"
-      - "BRING_YOUR_OWN_LICENSE"
+  freeform_tags = {
+    "Environment" = var.enable_free_tier ? "Development" : "Production"
+    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
+    "Shape"       = local.instance_shape
+  }
+}
 
-# Output Groups for organized results
-outputGroups:
-  - title: "🔗 Connection Information"
-    outputs:
-      - instance_public_ip
-      - ssh_connection_command
-      - database_connection_strings
+# Autonomous Database
+resource "oci_database_autonomous_database" "adb" {
+  compartment_id = local.current_compartment_id
+  
+  # Core configuration
+  cpu_core_count = local.database_ocpus
+  
+  # Storage configuration - use different attributes based on tier
+  data_storage_size_in_gb = var.enable_free_tier ? 20 : null
+  data_storage_size_in_tbs = var.enable_free_tier ? null : var.database_storage_tb
+  
+  db_name        = var.db_name
+  admin_password = var.db_admin_password
+  display_name   = "${var.resource_prefix}-adb"
+  
+  # Database settings - Force 23ai version
+  db_version    = "23ai"
+  db_workload   = var.database_workload
+  license_model = var.license_model
+  
+  # Free tier setting
+  is_free_tier = var.enable_free_tier
+  
+  # Paid tier features (disabled for free tier)
+  is_auto_scaling_enabled = local.auto_scaling_enabled
+  
+  # Enhanced security and networking
+  subnet_id                = oci_core_subnet.public_subnet.id
+  whitelisted_ips          = ["0.0.0.0/0"]
+  are_primary_whitelisted_ips_used = true
+  
+  # Additional configuration for stability
+  is_dedicated = false
 
-  - title: "📊 Deployment Summary"
-    outputs:
-      - deployment_tier
-      - resource_configuration
-      - estimated_monthly_cost
-
-  - title: "🚀 Next Steps"
-    outputs:
-      - setup_instructions
+  freeform_tags = {
+    "Environment" = var.enable_free_tier ? "Development" : "Production"
+    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
+    "Workload"    = var.database_workload
+    "Version"     = "23ai"
+    "CreatedBy"   = "Terraform"
+  }
+  
+  # Lifecycle management - only ignore defined_tags
+  lifecycle {
+    ignore_changes = [
+      defined_tags
+    ]
+  }
+}
