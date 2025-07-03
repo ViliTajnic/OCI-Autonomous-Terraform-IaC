@@ -205,6 +205,44 @@ variable "adb_backup_retention_period_in_days" {
   }
 }
 
+# Add these new variables after the existing ones
+
+variable "adb_auto_scaling_for_storage_enabled" {
+  description = "Enable auto-scaling for storage (payable tier only)"
+  type        = bool
+  default     = true
+}
+
+variable "adb_database_management_status" {
+  description = "Database management status (payable tier only)"
+  type        = string
+  default     = "NOT_ENABLED"
+  validation {
+    condition     = contains(["ENABLED", "NOT_ENABLED"], var.adb_database_management_status)
+    error_message = "Database management status must be ENABLED or NOT_ENABLED."
+  }
+}
+
+variable "adb_operations_insights_status" {
+  description = "Operations insights status (payable tier only)"
+  type        = string
+  default     = "NOT_ENABLED"
+  validation {
+    condition     = contains(["ENABLED", "NOT_ENABLED"], var.adb_operations_insights_status)
+    error_message = "Operations insights status must be ENABLED or NOT_ENABLED."
+  }
+}
+
+variable "adb_maintenance_schedule_type" {
+  description = "Maintenance schedule type (payable tier only)"
+  type        = string
+  default     = "REGULAR"
+  validation {
+    condition     = contains(["EARLY", "REGULAR"], var.adb_maintenance_schedule_type)
+    error_message = "Maintenance schedule type must be EARLY or REGULAR."
+  }
+}
+
 # ===================================================================
 # NETWORK CONFIGURATION
 # ===================================================================

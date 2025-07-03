@@ -56,6 +56,39 @@ variables:
     visible: false
     required: false
 
+  adb_auto_scaling_for_storage_enabled:
+    type: boolean
+    title: "Enable Storage Auto Scaling"
+    description: "Automatically scale storage based on usage"
+    default: true
+
+  adb_database_management_status:
+    type: enum
+    title: "Database Management"
+    description: "Enable advanced database management features"
+    default: "NOT_ENABLED"
+    enum:
+      - "ENABLED"
+      - "NOT_ENABLED"
+
+  adb_operations_insights_status:
+    type: enum
+    title: "Operations Insights"
+    description: "Enable operations insights monitoring"
+    default: "NOT_ENABLED"
+    enum:
+      - "ENABLED"
+      - "NOT_ENABLED"
+
+  adb_maintenance_schedule_type:
+    type: enum
+    title: "Maintenance Schedule"
+    description: "Maintenance window preference"
+    default: "REGULAR"
+    enum:
+      - "EARLY"
+      - "REGULAR"
+
   # ===================================================================
   # REQUIRED CONFIGURATION
   # ===================================================================

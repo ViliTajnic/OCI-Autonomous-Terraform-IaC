@@ -214,37 +214,57 @@ resource "oci_core_instance" "compute_instance" {
 
 # Autonomous Database
 resource "oci_database_autonomous_database" "adb" {
+  # Required fields
   compartment_id = local.current_compartment_id
+  admin_password = var.db_admin_password
+  db_name        = var.db_name
   
-  # Core configuration
+  # Core configuration based on tier selection
   cpu_core_count = local.actual_adb_cpu_cores
   
-  # Storage configuration
-  data_storage_size_in_gb = local.actual_adb_storage_gb
+  # Storage configuration - Always Free uses GB, Payable can use TB
+  data_storage_size_in_gb = var.use_always_free_adb ? local.free_tier_adb_storage_gb : (var.adb_data_storage_size_in_gb <= 1024 ? var.adb_data_storage_size_in_gb : null)
+  data_storage_size_in_tbs = var.use_always_free_adb ? null : (var.adb_data_storage_size_in_gb > 1024 ? ceil(var.adb_data_storage_size_in_gb / 1024) : null)
   
-  db_name        = var.db_name
-  admin_password = var.db_admin_password
+  # Database configuration
   display_name   = "${var.resource_prefix}-adb"
-  
-  # Database settings - Always use 23ai for latest features
-  db_version    = var.adb_version
-  db_workload   = var.adb_workload
-  license_model = var.adb_license_model
+  db_version     = var.adb_version
+  db_workload    = var.adb_workload
+  license_model  = var.adb_license_model
   
   # Free tier setting
   is_free_tier = var.use_always_free_adb
   
   # Auto-scaling configuration (payable tier only)
   is_auto_scaling_enabled = local.adb_auto_scaling_enabled
-  auto_scaling_max_cpu_core_count = local.adb_max_cpu_core_count
   
-  # Enhanced security and networking
-  subnet_id                = oci_core_subnet.public_subnet.id
-  whitelisted_ips          = ["0.0.0.0/0"]
+  # Storage auto-scaling (payable tier only)
+  is_auto_scaling_for_storage_enabled = var.use_always_free_adb ? false : var.adb_auto_scaling_for_storage_enabled
+  
+  # Character sets for proper internationalization
+  character_set  = "AL32UTF8"
+  ncharacter_set = "AL16UTF16"
+  
+  # Network configuration
+  subnet_id = oci_core_subnet.public_subnet.id
+  whitelisted_ips = ["0.0.0.0/0"]
   are_primary_whitelisted_ips_used = true
+  
+  # Security settings
+  is_mtls_connection_required = true  # Enhanced security with mTLS
+  
+  # Backup configuration (payable tier only)
+  backup_retention_period_in_days = var.use_always_free_adb ? null : var.adb_backup_retention_period_in_days
+  
+  # Management features (payable tier only)
+  database_management_status = var.use_always_free_adb ? null : var.adb_database_management_status
+  operations_insights_status = var.use_always_free_adb ? null : var.adb_operations_insights_status
   
   # Additional configuration
   is_dedicated = false
+  
+  # Maintenance schedule (payable tier only)
+  autonomous_maintenance_schedule_type = var.use_always_free_adb ? null : var.adb_maintenance_schedule_type
 
   freeform_tags = {
     "Environment" = var.use_always_free_adb ? "Development" : "Production"
@@ -254,8 +274,10 @@ resource "oci_database_autonomous_database" "adb" {
     "Version"     = var.adb_version
     "CreatedBy"   = "Terraform"
     "CPU_Cores"   = tostring(local.actual_adb_cpu_cores)
-    "Storage_GB"  = tostring(local.actual_adb_storage_gb)
+    "Storage_Size" = var.use_always_free_adb ? "20GB" : "${var.adb_data_storage_size_in_gb}GB"
     "Auto_Scaling" = var.use_always_free_adb ? "Not_Available" : (var.adb_auto_scaling_enabled ? "Enabled" : "Disabled")
+    "MTLS_Required" = "true"
+    "Python_Driver" = "python-oracledb"
   }
   
   # Lifecycle management
