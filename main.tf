@@ -23,23 +23,31 @@ data "oci_core_images" "compute_images" {
   compartment_id           = local.current_compartment_id
   operating_system         = "Oracle Linux"
   operating_system_version = "8"
-  shape                    = local.instance_shape
+  shape                    = local.actual_instance_shape
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
 }
 
 # Local values for conditional logic
 locals {
+  # Current compartment from OCI Resource Manager context
+  current_compartment_id = var.compartment_ocid
+  
   # Always Free tier configurations
   free_tier_compute_shape = "VM.Standard.E2.1.Micro"
-  free_tier_db_ocpus      = 1
+  free_tier_adb_cpu_cores = 1
+  free_tier_adb_storage_gb = 20
 
-  # Determine actual values based on free tier setting
-  instance_shape = var.enable_free_tier ? local.free_tier_compute_shape : var.compute_shape
-  database_ocpus = var.enable_free_tier ? local.free_tier_db_ocpus : var.database_ocpus
+  # Determine actual compute configuration
+  actual_instance_shape = var.use_always_free_compute ? local.free_tier_compute_shape : var.instance_shape
   
-  # Auto-scaling only available for paid tier
-  auto_scaling_enabled = var.enable_free_tier ? false : var.enable_auto_scaling
+  # Determine actual ADB configuration
+  actual_adb_cpu_cores = var.use_always_free_adb ? local.free_tier_adb_cpu_cores : var.adb_cpu_core_count
+  actual_adb_storage_gb = var.use_always_free_adb ? local.free_tier_adb_storage_gb : var.adb_data_storage_size_in_gb
+  
+  # Auto-scaling only available for payable tier
+  adb_auto_scaling_enabled = var.use_always_free_adb ? false : var.adb_auto_scaling_enabled
+  adb_max_cpu_core_count = var.use_always_free_adb ? null : (var.adb_auto_scaling_enabled ? var.adb_auto_scaling_max_cpu_core_count : null)
 }
 
 # VCN
@@ -50,8 +58,9 @@ resource "oci_core_vcn" "vcn" {
   dns_label      = "pythonvcn"
 
   freeform_tags = {
-    "Environment" = var.enable_free_tier ? "Development" : "Production"
-    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
+    "Environment" = var.use_always_free_adb ? "Development" : "Production"
+    "ADB_Tier"    = var.use_always_free_adb ? "Always-Free" : "Payable"
+    "Compute_Tier" = var.use_always_free_compute ? "Always-Free" : "Custom"
   }
 }
 
@@ -96,7 +105,7 @@ resource "oci_core_security_list" "public_sl" {
     }
   }
 
-  # HTTP access (always enabled)
+  # HTTP access (always enabled for web development)
   ingress_security_rules {
     protocol = "6" # TCP
     source   = "0.0.0.0/0"
@@ -106,7 +115,7 @@ resource "oci_core_security_list" "public_sl" {
     }
   }
 
-  # HTTPS access (always enabled)
+  # HTTPS access (always enabled for web development)
   ingress_security_rules {
     protocol = "6" # TCP
     source   = "0.0.0.0/0"
@@ -116,7 +125,7 @@ resource "oci_core_security_list" "public_sl" {
     }
   }
 
-  # Flask development port
+  # Flask development port (always enabled)
   ingress_security_rules {
     protocol = "6" # TCP
     source   = "0.0.0.0/0"
@@ -126,7 +135,7 @@ resource "oci_core_security_list" "public_sl" {
     }
   }
 
-  # Jupyter notebook port
+  # Jupyter notebook port (always enabled)
   ingress_security_rules {
     protocol = "6" # TCP
     source   = "0.0.0.0/0"
@@ -154,14 +163,14 @@ resource "oci_core_instance" "compute_instance" {
   availability_domain = data.oci_identity_availability_domain.ad.name
   compartment_id      = local.current_compartment_id
   display_name        = "${var.resource_prefix}-instance"
-  shape               = local.instance_shape
+  shape               = local.actual_instance_shape
 
-  # Shape configuration (only for paid tier Flex shapes)
+  # Shape configuration (only for custom compute instances)
   dynamic "shape_config" {
-    for_each = var.enable_free_tier ? [] : [1]
+    for_each = var.use_always_free_compute ? [] : [1]
     content {
-      ocpus         = var.compute_ocpus
-      memory_in_gbs = var.compute_memory_gb
+      ocpus         = var.instance_ocpus
+      memory_in_gbs = var.instance_memory_gb
     }
   }
 
@@ -185,9 +194,10 @@ resource "oci_core_instance" "compute_instance" {
   }
 
   freeform_tags = {
-    "Environment" = var.enable_free_tier ? "Development" : "Production"
-    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
-    "Shape"       = local.instance_shape
+    "Environment" = var.use_always_free_adb ? "Development" : "Production"
+    "ADB_Tier"    = var.use_always_free_adb ? "Always-Free" : "Payable"
+    "Compute_Tier" = var.use_always_free_compute ? "Always-Free" : "Custom"
+    "Shape"       = local.actual_instance_shape
   }
 }
 
@@ -196,44 +206,48 @@ resource "oci_database_autonomous_database" "adb" {
   compartment_id = local.current_compartment_id
   
   # Core configuration
-  cpu_core_count = local.database_ocpus
+  cpu_core_count = local.actual_adb_cpu_cores
   
-  # Storage configuration - use different attributes based on tier
-  data_storage_size_in_gb = var.enable_free_tier ? 20 : null
-  data_storage_size_in_tbs = var.enable_free_tier ? null : var.database_storage_tb
+  # Storage configuration
+  data_storage_size_in_gb = local.actual_adb_storage_gb
   
   db_name        = var.db_name
   admin_password = var.db_admin_password
   display_name   = "${var.resource_prefix}-adb"
   
-  # Database settings - Force 23ai version
-  db_version    = "23ai"
-  db_workload   = var.database_workload
-  license_model = var.license_model
+  # Database settings - Always use 23ai for latest features
+  db_version    = var.adb_version
+  db_workload   = var.adb_workload
+  license_model = var.adb_license_model
   
   # Free tier setting
-  is_free_tier = var.enable_free_tier
+  is_free_tier = var.use_always_free_adb
   
-  # Paid tier features (disabled for free tier)
-  is_auto_scaling_enabled = local.auto_scaling_enabled
+  # Auto-scaling configuration (payable tier only)
+  is_auto_scaling_enabled = local.adb_auto_scaling_enabled
+  auto_scaling_max_cpu_core_count = local.adb_max_cpu_core_count
   
   # Enhanced security and networking
   subnet_id                = oci_core_subnet.public_subnet.id
   whitelisted_ips          = ["0.0.0.0/0"]
   are_primary_whitelisted_ips_used = true
   
-  # Additional configuration for stability
+  # Additional configuration
   is_dedicated = false
 
   freeform_tags = {
-    "Environment" = var.enable_free_tier ? "Development" : "Production"
-    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
-    "Workload"    = var.database_workload
-    "Version"     = "23ai"
+    "Environment" = var.use_always_free_adb ? "Development" : "Production"
+    "ADB_Tier"    = var.use_always_free_adb ? "Always-Free" : "Payable"
+    "Compute_Tier" = var.use_always_free_compute ? "Always-Free" : "Custom"
+    "Workload"    = var.adb_workload
+    "Version"     = var.adb_version
     "CreatedBy"   = "Terraform"
+    "CPU_Cores"   = tostring(local.actual_adb_cpu_cores)
+    "Storage_GB"  = tostring(local.actual_adb_storage_gb)
+    "Auto_Scaling" = var.use_always_free_adb ? "Not_Available" : (var.adb_auto_scaling_enabled ? "Enabled" : "Disabled")
   }
   
-  # Lifecycle management - only ignore defined_tags
+  # Lifecycle management
   lifecycle {
     ignore_changes = [
       defined_tags

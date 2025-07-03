@@ -1,242 +1,383 @@
-# Configure the Oracle Cloud Infrastructure Provider
-terraform {
-  required_providers {
-    oci = {
-      source = "oracle/oci"
-    }
+# ===================================================================
+# AUTOMATICALLY PROVIDED BY OCI RESOURCE MANAGER
+# ===================================================================
+
+variable "compartment_ocid" {
+  description = "Compartment OCID (automatically provided by OCI Resource Manager)"
+  type        = string
+  default     = ""
+}
+
+variable "tenancy_ocid" {
+  description = "Tenancy OCID (automatically provided by OCI Resource Manager)"
+  type        = string
+  default     = ""
+}
+
+variable "region" {
+  description = "Region (automatically provided by OCI Resource Manager)"
+  type        = string
+  default     = ""
+}
+
+# ===================================================================
+# REQUIRED CONFIGURATION (Only 2 inputs needed!)
+# ===================================================================
+
+variable "ssh_public_key" {
+  description = "SSH public key for instance access"
+  type        = string
+}
+
+variable "db_admin_password" {
+  description = "Admin password for Autonomous Database (8+ characters, must include uppercase, lowercase, number)"
+  type        = string
+  sensitive   = true
+  validation {
+    condition     = length(var.db_admin_password) >= 8
+    error_message = "Database admin password must be at least 8 characters long."
   }
 }
 
-# Get current compartment from the execution context
-# OCI Resource Manager automatically provides compartment_ocid
-locals {
-  # Use the compartment where the stack is being executed
-  current_compartment_id = var.compartment_ocid
+# ===================================================================
+# DEPLOYMENT MODE (Free vs Payable ADB)
+# ===================================================================
+
+variable "use_always_free_adb" {
+  description = "Use Always Free Autonomous Database (true) or Payable ADB with custom resources (false)"
+  type        = bool
+  default     = true
 }
 
-data "oci_identity_availability_domain" "ad" {
-  compartment_id = local.current_compartment_id
-  ad_number      = 1
+# ===================================================================
+# BASIC SETTINGS (Optional customization)
+# ===================================================================
+
+variable "resource_prefix" {
+  description = "Prefix for all resource names"
+  type        = string
+  default     = "python-oracle"
 }
 
-data "oci_core_images" "compute_images" {
-  compartment_id           = local.current_compartment_id
-  operating_system         = "Oracle Linux"
-  operating_system_version = "8"
-  shape                    = local.instance_shape
-  sort_by                  = "TIMECREATED"
-  sort_order               = "DESC"
-}
-
-# Local values for conditional logic
-locals {
-  # Always Free tier configurations
-  free_tier_compute_shape = "VM.Standard.E2.1.Micro"
-  free_tier_db_ocpus      = 1
-
-  # Determine actual values based on free tier setting
-  instance_shape = var.enable_free_tier ? local.free_tier_compute_shape : var.compute_shape
-  database_ocpus = var.enable_free_tier ? local.free_tier_db_ocpus : var.database_ocpus
-  
-  # Auto-scaling only available for paid tier
-  auto_scaling_enabled = var.enable_free_tier ? false : var.enable_auto_scaling
-}
-
-# VCN
-resource "oci_core_vcn" "vcn" {
-  compartment_id = local.current_compartment_id
-  display_name   = "${var.resource_prefix}-vcn"
-  cidr_block     = "10.0.0.0/16"
-  dns_label      = "pythonvcn"
-
-  freeform_tags = {
-    "Environment" = var.enable_free_tier ? "Development" : "Production"
-    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
+variable "db_name" {
+  description = "Database name (alphanumeric only, max 14 chars)"
+  type        = string
+  default     = "PYTHONADB"
+  validation {
+    condition     = can(regex("^[A-Za-z][A-Za-z0-9]*$", var.db_name)) && length(var.db_name) <= 14
+    error_message = "Database name must start with a letter, contain only alphanumeric characters, and be max 14 characters."
   }
 }
 
-# Internet Gateway
-resource "oci_core_internet_gateway" "ig" {
-  compartment_id = local.current_compartment_id
-  vcn_id         = oci_core_vcn.vcn.id
-  display_name   = "${var.resource_prefix}-ig"
-}
+# ===================================================================
+# PAYABLE ADB CONFIGURATION
+# (Only used when use_always_free_adb = false)
+# ===================================================================
 
-# Route table
-resource "oci_core_route_table" "public_rt" {
-  compartment_id = local.current_compartment_id
-  vcn_id         = oci_core_vcn.vcn.id
-  display_name   = "${var.resource_prefix}-public-rt"
-
-  route_rules {
-    destination       = "0.0.0.0/0"
-    network_entity_id = oci_core_internet_gateway.ig.id
+variable "adb_cpu_core_count" {
+  description = "Number of CPU cores for Autonomous Database (payable tier only)"
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.adb_cpu_core_count >= 1 && var.adb_cpu_core_count <= 128
+    error_message = "ADB CPU core count must be between 1 and 128."
   }
 }
 
-# Security list
-resource "oci_core_security_list" "public_sl" {
-  compartment_id = local.current_compartment_id
-  vcn_id         = oci_core_vcn.vcn.id
-  display_name   = "${var.resource_prefix}-public-sl"
-
-  # Outbound traffic
-  egress_security_rules {
-    destination = "0.0.0.0/0"
-    protocol    = "all"
-  }
-
-  # SSH access
-  ingress_security_rules {
-    protocol = "6" # TCP
-    source   = "0.0.0.0/0"
-    tcp_options {
-      min = 22
-      max = 22
-    }
-  }
-
-  # HTTP access (always enabled)
-  ingress_security_rules {
-    protocol = "6" # TCP
-    source   = "0.0.0.0/0"
-    tcp_options {
-      min = 80
-      max = 80
-    }
-  }
-
-  # HTTPS access (always enabled)
-  ingress_security_rules {
-    protocol = "6" # TCP
-    source   = "0.0.0.0/0"
-    tcp_options {
-      min = 443
-      max = 443
-    }
-  }
-
-  # Flask development port
-  ingress_security_rules {
-    protocol = "6" # TCP
-    source   = "0.0.0.0/0"
-    tcp_options {
-      min = 5000
-      max = 5000
-    }
-  }
-
-  # Jupyter notebook port
-  ingress_security_rules {
-    protocol = "6" # TCP
-    source   = "0.0.0.0/0"
-    tcp_options {
-      min = 8888
-      max = 8888
-    }
+variable "adb_data_storage_size_in_gb" {
+  description = "Database storage in GB for payable tier (minimum 20GB)"
+  type        = number
+  default     = 1024
+  validation {
+    condition     = var.adb_data_storage_size_in_gb >= 20 && var.adb_data_storage_size_in_gb <= 393216
+    error_message = "ADB storage must be between 20GB and 393,216GB (384TB)."
   }
 }
 
-# Public subnet
-resource "oci_core_subnet" "public_subnet" {
-  compartment_id             = local.current_compartment_id
-  vcn_id                     = oci_core_vcn.vcn.id
-  display_name               = "${var.resource_prefix}-public-subnet"
-  cidr_block                 = "10.0.1.0/24"
-  dns_label                  = "publicsubnet"
-  route_table_id             = oci_core_route_table.public_rt.id
-  security_list_ids          = [oci_core_security_list.public_sl.id]
-  prohibit_public_ip_on_vnic = false
+variable "adb_auto_scaling_enabled" {
+  description = "Enable auto-scaling for ADB (payable tier only)"
+  type        = bool
+  default     = false
 }
 
-# Compute instance
-resource "oci_core_instance" "compute_instance" {
-  availability_domain = data.oci_identity_availability_domain.ad.name
-  compartment_id      = local.current_compartment_id
-  display_name        = "${var.resource_prefix}-instance"
-  shape               = local.instance_shape
-
-  # Shape configuration (only for paid tier Flex shapes)
-  dynamic "shape_config" {
-    for_each = var.enable_free_tier ? [] : [1]
-    content {
-      ocpus         = var.compute_ocpus
-      memory_in_gbs = var.compute_memory_gb
-    }
-  }
-
-  create_vnic_details {
-    subnet_id        = oci_core_subnet.public_subnet.id
-    display_name     = "${var.resource_prefix}-vnic"
-    assign_public_ip = true
-    hostname_label   = "pythonhost"
-  }
-
-  source_details {
-    source_type = "image"
-    source_id   = data.oci_core_images.compute_images.images[0].id
-  }
-
-  metadata = {
-    ssh_authorized_keys = var.ssh_public_key
-    user_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
-      db_password = var.db_admin_password
-    }))
-  }
-
-  freeform_tags = {
-    "Environment" = var.enable_free_tier ? "Development" : "Production"
-    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
-    "Shape"       = local.instance_shape
+variable "adb_auto_scaling_max_cpu_core_count" {
+  description = "Maximum CPU cores for auto-scaling (payable tier only)"
+  type        = number
+  default     = 4
+  validation {
+    condition     = var.adb_auto_scaling_max_cpu_core_count >= 1 && var.adb_auto_scaling_max_cpu_core_count <= 128
+    error_message = "Auto-scaling max CPU cores must be between 1 and 128."
   }
 }
 
-# Autonomous Database
-resource "oci_database_autonomous_database" "adb" {
-  compartment_id = local.current_compartment_id
-  
-  # Core configuration
-  cpu_core_count = local.database_ocpus
-  
-  # Storage configuration - use different attributes based on tier
-  data_storage_size_in_gb = var.enable_free_tier ? 20 : null
-  data_storage_size_in_tbs = var.enable_free_tier ? null : var.database_storage_tb
-  
-  db_name        = var.db_name
-  admin_password = var.db_admin_password
-  display_name   = "${var.resource_prefix}-adb"
-  
-  # Database settings - Force 23ai version
-  db_version    = "23ai"
-  db_workload   = var.database_workload
-  license_model = var.license_model
-  
-  # Free tier setting
-  is_free_tier = var.enable_free_tier
-  
-  # Paid tier features (disabled for free tier)
-  is_auto_scaling_enabled = local.auto_scaling_enabled
-  
-  # Enhanced security and networking
-  subnet_id                = oci_core_subnet.public_subnet.id
-  whitelisted_ips          = ["0.0.0.0/0"]
-  are_primary_whitelisted_ips_used = true
-  
-  # Additional configuration for stability
-  is_dedicated = false
+# ===================================================================
+# COMPUTE INSTANCE CONFIGURATION
+# ===================================================================
 
-  freeform_tags = {
-    "Environment" = var.enable_free_tier ? "Development" : "Production"
-    "Tier"        = var.enable_free_tier ? "Always-Free" : "Paid"
-    "Workload"    = var.database_workload
-    "Version"     = "23ai"
-    "CreatedBy"   = "Terraform"
+variable "use_always_free_compute" {
+  description = "Use Always Free compute instance (true) or custom shape (false)"
+  type        = bool
+  default     = true
+}
+
+variable "instance_shape" {
+  description = "Instance shape for custom compute (when use_always_free_compute = false)"
+  type        = string
+  default     = "VM.Standard.E4.Flex"
+  validation {
+    condition = contains([
+      "VM.Standard.E3.Flex",
+      "VM.Standard.E4.Flex", 
+      "VM.Standard.A1.Flex",
+      "VM.Standard3.Flex"
+    ], var.instance_shape)
+    error_message = "Must be a valid Flex shape."
   }
-  
-  # Lifecycle management - only ignore defined_tags
-  lifecycle {
-    ignore_changes = [
-      defined_tags
-    ]
+}
+
+variable "instance_ocpus" {
+  description = "Number of OCPUs for custom compute instance"
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.instance_ocpus >= 1 && var.instance_ocpus <= 64
+    error_message = "Instance OCPUs must be between 1 and 64."
   }
+}
+
+variable "instance_memory_gb" {
+  description = "Memory in GB for custom compute instance"
+  type        = number
+  default     = 16
+  validation {
+    condition     = var.instance_memory_gb >= 1 && var.instance_memory_gb <= 1024
+    error_message = "Instance memory must be between 1 and 1024 GB."
+  }
+}
+
+# ===================================================================
+# ADVANCED DATABASE OPTIONS
+# ===================================================================
+
+variable "adb_version" {
+  description = "Oracle Database version (always 23ai for latest features)"
+  type        = string
+  default     = "23ai"
+  validation {
+    condition     = var.adb_version == "23ai"
+    error_message = "Database version must be 23ai for optimal performance and features."
+  }
+}
+
+variable "adb_workload" {
+  description = "Database workload type"
+  type        = string
+  default     = "OLTP"
+  validation {
+    condition     = contains(["OLTP", "DW", "AJD"], var.adb_workload)
+    error_message = "Workload must be OLTP (transactions), DW (data warehouse), or AJD (JSON)."
+  }
+}
+
+variable "adb_license_model" {
+  description = "Database license model"
+  type        = string
+  default     = "LICENSE_INCLUDED"
+  validation {
+    condition     = contains(["LICENSE_INCLUDED", "BRING_YOUR_OWN_LICENSE"], var.adb_license_model)
+    # ===================================================================
+# AUTOMATICALLY PROVIDED BY OCI RESOURCE MANAGER
+# ===================================================================
+
+variable "compartment_ocid" {
+  description = "Compartment OCID (automatically provided by OCI Resource Manager)"
+  type        = string
+  default     = ""
+}
+
+variable "tenancy_ocid" {
+  description = "Tenancy OCID (automatically provided by OCI Resource Manager)"
+  type        = string
+  default     = ""
+}
+
+variable "region" {
+  description = "Region (automatically provided by OCI Resource Manager)"
+  type        = string
+  default     = ""
+}
+
+# ===================================================================
+# REQUIRED CONFIGURATION (Only 2 inputs needed!)
+# ===================================================================
+
+variable "ssh_public_key" {
+  description = "SSH public key for instance access"
+  type        = string
+}
+
+variable "db_admin_password" {
+  description = "Admin password for Autonomous Database (8+ characters, must include uppercase, lowercase, number)"
+  type        = string
+  sensitive   = true
+  validation {
+    condition     = length(var.db_admin_password) >= 8
+    error_message = "Database admin password must be at least 8 characters long."
+  }
+}
+
+# ===================================================================
+# DEPLOYMENT MODE (Default: Always Free)
+# ===================================================================
+
+variable "enable_free_tier" {
+  description = "Use Always Free tier resources (recommended for development)"
+  type        = bool
+  default     = true
+}
+
+# ===================================================================
+# BASIC SETTINGS (Optional customization)
+# ===================================================================
+
+variable "resource_prefix" {
+  description = "Prefix for all resource names"
+  type        = string
+  default     = "python-oracle"
+}
+
+variable "db_name" {
+  description = "Database name (alphanumeric only, max 14 chars)"
+  type        = string
+  default     = "PYTHONADB"
+  validation {
+    condition     = can(regex("^[A-Za-z][A-Za-z0-9]*$", var.db_name)) && length(var.db_name) <= 14
+    error_message = "Database name must start with a letter, contain only alphanumeric characters, and be max 14 characters."
+  }
+}
+
+variable "enable_web_access" {
+  description = "Enable HTTP (80) and HTTPS (443) ports for web applications (always enabled)"
+  type        = bool
+  default     = true
+}
+
+# ===================================================================
+# PAID TIER CONFIGURATION
+# (Only used when enable_free_tier = false)
+# ===================================================================
+
+variable "compute_shape" {
+  description = "Compute instance shape (only for paid tier)"
+  type        = string
+  default     = "VM.Standard.E4.Flex"
+  validation {
+    condition = contains([
+      "VM.Standard.E3.Flex",
+      "VM.Standard.E4.Flex", 
+      "VM.Standard.A1.Flex",
+      "VM.Standard3.Flex"
+    ], var.compute_shape)
+    error_message = "Must be a valid Flex shape."
+  }
+}
+
+variable "compute_ocpus" {
+  description = "Number of OCPUs for compute instance (only for paid tier)"
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.compute_ocpus >= 1 && var.compute_ocpus <= 64
+    error_message = "OCPUs must be between 1 and 64."
+  }
+}
+
+variable "compute_memory_gb" {
+  description = "Memory in GB for compute instance (only for paid tier)"
+  type        = number
+  default     = 16
+  validation {
+    condition     = var.compute_memory_gb >= 1 && var.compute_memory_gb <= 1024
+    error_message = "Memory must be between 1 and 1024 GB."
+  }
+}
+
+variable "database_ocpus" {
+  description = "Number of OCPUs for Autonomous Database (only for paid tier)"
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.database_ocpus >= 1 && var.database_ocpus <= 128
+    error_message = "Database OCPUs must be between 1 and 128."
+  }
+}
+
+variable "database_storage_tb" {
+  description = "Database storage in TB (only for paid tier)"
+  type        = number
+  default     = 1
+  validation {
+    condition     = var.database_storage_tb >= 1 && var.database_storage_tb <= 384
+    error_message = "Database storage must be between 1 and 384 TB."
+  }
+}
+
+variable "enable_auto_scaling" {
+  description = "Enable database auto-scaling (only for paid tier)"
+  type        = bool
+  default     = false
+}
+
+# ===================================================================
+# ADVANCED OPTIONS (Rarely changed)
+# ===================================================================
+
+variable "database_version" {
+  description = "Oracle Database version (fixed to 23ai)"
+  type        = string
+  default     = "23ai"
+  validation {
+    condition     = var.database_version == "23ai"
+    error_message = "Database version must be 23ai."
+  }
+}
+
+variable "database_workload" {
+  description = "Database workload type"
+  type        = string
+  default     = "OLTP"
+  validation {
+    condition     = contains(["OLTP", "DW", "AJD"], var.database_workload)
+    error_message = "Workload must be OLTP (transactions), DW (data warehouse), or AJD (JSON)."
+  }
+}
+
+variable "license_model" {
+  description = "Database license model"
+  type        = string
+  default     = "LICENSE_INCLUDED"
+  validation {
+    condition     = contains(["LICENSE_INCLUDED", "BRING_YOUR_OWN_LICENSE"], var.license_model)
+    error_message = "License model must be LICENSE_INCLUDED or BRING_YOUR_OWN_LICENSE."
+  }
+}
+
+variable "adb_backup_retention_period_in_days" {
+  description = "Backup retention period in days (payable tier only)"
+  type        = number
+  default     = 7
+  validation {
+    condition     = var.adb_backup_retention_period_in_days >= 1 && var.adb_backup_retention_period_in_days <= 60
+    error_message = "Backup retention must be between 1 and 60 days."
+  }
+}
+
+# ===================================================================
+# NETWORK CONFIGURATION
+# ===================================================================
+
+variable "enable_web_access" {
+  description = "Enable HTTP (80) and HTTPS (443) ports for web applications"
+  type        = bool
+  default     = true
 }
