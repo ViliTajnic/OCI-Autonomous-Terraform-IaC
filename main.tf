@@ -10,26 +10,6 @@ terraform {
 # Get current compartment from the execution context
 # OCI Resource Manager automatically provides compartment_ocid
 locals {
-  # Use the compartment where the stack is being executed
-  current_compartment_id = var.compartment_ocid
-}
-
-data "oci_identity_availability_domain" "ad" {
-  compartment_id = local.current_compartment_id
-  ad_number      = 1
-}
-
-data "oci_core_images" "compute_images" {
-  compartment_id           = local.current_compartment_id
-  operating_system         = "Oracle Linux"
-  operating_system_version = "8"
-  shape                    = local.actual_instance_shape
-  sort_by                  = "TIMECREATED"
-  sort_order               = "DESC"
-}
-
-# Local values for conditional logic
-locals {
   # Current compartment from OCI Resource Manager context
   current_compartment_id = var.compartment_ocid
   
@@ -47,7 +27,20 @@ locals {
   
   # Auto-scaling only available for payable tier
   adb_auto_scaling_enabled = var.use_always_free_adb ? false : var.adb_auto_scaling_enabled
-  adb_max_cpu_core_count = var.use_always_free_adb ? null : (var.adb_auto_scaling_enabled ? var.adb_auto_scaling_max_cpu_core_count : null)
+}
+
+data "oci_identity_availability_domain" "ad" {
+  compartment_id = local.current_compartment_id
+  ad_number      = 1
+}
+
+data "oci_core_images" "compute_images" {
+  compartment_id           = local.current_compartment_id
+  operating_system         = "Oracle Linux"
+  operating_system_version = "8"
+  shape                    = local.actual_instance_shape
+  sort_by                  = "TIMECREATED"
+  sort_order               = "DESC"
 }
 
 # VCN
@@ -225,7 +218,6 @@ resource "oci_database_autonomous_database" "adb" {
   
   # Auto-scaling configuration (payable tier only)
   is_auto_scaling_enabled = local.adb_auto_scaling_enabled
-  auto_scaling_max_cpu_core_count = local.adb_max_cpu_core_count
   
   # Enhanced security and networking
   subnet_id                = oci_core_subnet.public_subnet.id
