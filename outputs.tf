@@ -26,56 +26,60 @@ output "database_connection_strings" {
 # ===================================================================
 
 output "deployment_configuration" {
-  description = "Summary of deployment configuration"
+  description = "Complete deployment configuration summary"
   value = {
+    # Database configuration
     adb_tier = var.use_always_free_adb ? "Always Free ADB" : "Payable ADB"
-    adb_specs = var.use_always_free_adb ? "1 CPU, 20GB" : "${var.adb_cpu_core_count} CPUs, ${var.adb_data_storage_size_in_gb}GB"
-    adb_auto_scaling = var.use_always_free_adb ? "Not Available" : (var.adb_auto_scaling_enabled ? "Enabled (max ${var.adb_auto_scaling_max_cpu_core_count} CPUs)" : "Disabled")
+    adb_cpu_cores = local.actual_adb_cpu_cores
+    adb_storage_gb = local.actual_adb_storage_gb
+    adb_auto_scaling = var.use_always_free_adb ? "Not Available" : (var.adb_auto_scaling_enabled ? "Enabled" : "Disabled")
+    adb_max_cpu_cores = var.use_always_free_adb ? "N/A" : (var.adb_auto_scaling_enabled ? var.adb_auto_scaling_max_cpu_core_count : "N/A")
+    
+    # Compute configuration
     compute_tier = var.use_always_free_compute ? "Always Free Compute" : "Custom Compute"
-    compute_specs = var.use_always_free_compute ? "VM.Standard.E2.1.Micro (1 OCPU, 1GB RAM)" : "${var.instance_shape} (${var.instance_ocpus} OCPUs, ${var.instance_memory_gb}GB RAM)"
-    database_version = var.adb_version
+    compute_shape = local.actual_instance_shape
+    compute_specs = var.use_always_free_compute ? "1 OCPU, 1GB RAM" : "${var.instance_ocpus} OCPUs, ${var.instance_memory_gb}GB RAM"
+    
+    # Database details
+    db_version = var.adb_version
+    db_workload = var.adb_workload
+    
+    # Python environment
     python_driver = "python-oracledb (modern successor to cx_Oracle)"
+    pre_installed_packages = "oracledb, flask, pandas, numpy, jupyter, matplotlib, seaborn"
   }
 }
 
 output "cost_estimation" {
-  description = "Estimated monthly cost breakdown"
+  description = "Cost estimation based on configuration"
   value = {
-    adb_cost = var.use_always_free_adb ? "$0/month (Always Free)" : "Variable (based on usage)"
-    compute_cost = var.use_always_free_compute ? "$0/month (Always Free)" : "Variable (based on usage)"
-    network_cost = "$0/month (basic networking included)"
-    total_estimation = var.use_always_free_adb && var.use_always_free_compute ? "✅ $0/month (Completely Free)" : "💰 Variable cost (monitor usage in OCI Console)"
-    cost_optimization_tip = var.use_always_free_adb && var.use_always_free_compute ? "Perfect for development and learning!" : "Consider using Always Free options for development environments"
+    monthly_cost = var.use_always_free_adb && var.use_always_free_compute ? "$0/month (Always Free)" : var.use_always_free_adb ? "~$10-50/month (Free ADB + Custom Compute)" : var.use_always_free_compute ? "~$50-200/month (Custom ADB + Free Compute)" : "Variable (Custom ADB + Custom Compute)"
+    adb_cost = var.use_always_free_adb ? "Free (Always Free tier)" : "Variable based on CPU/storage usage"
+    compute_cost = var.use_always_free_compute ? "Free (Always Free tier)" : "Variable based on shape and usage"
+    note = "Actual costs may vary based on usage patterns and region. Check OCI pricing calculator for precise estimates."
   }
 }
 
 output "resource_summary" {
-  description = "Detailed resource configuration"
+  description = "Summary of all deployed resources"
   value = {
-    database = {
-      name = var.db_name
-      tier = var.use_always_free_adb ? "Always Free" : "Payable"
-      cpu_cores = var.use_always_free_adb ? 1 : var.adb_cpu_core_count
-      storage_gb = var.use_always_free_adb ? 20 : var.adb_data_storage_size_in_gb
-      auto_scaling = var.use_always_free_adb ? false : var.adb_auto_scaling_enabled
-      workload_type = var.adb_workload
-      version = var.adb_version
-    }
-    compute = {
-      shape = var.use_always_free_compute ? "VM.Standard.E2.1.Micro" : var.instance_shape
-      tier = var.use_always_free_compute ? "Always Free" : "Custom"
-      ocpus = var.use_always_free_compute ? 1 : var.instance_ocpus
-      memory_gb = var.use_always_free_compute ? 1 : var.instance_memory_gb
-    }
-    networking = {
-      ports_open = ["22 (SSH)", "80 (HTTP)", "443 (HTTPS)", "5000 (Flask)", "8888 (Jupyter)"]
-      access_type = "Public Internet"
-    }
-    software = {
-      python_driver = "python-oracledb"
-      additional_packages = ["pandas", "numpy", "flask", "jupyter", "matplotlib", "seaborn"]
-      operating_system = "Oracle Linux 8"
-    }
+    # Core resources
+    autonomous_database = "${var.resource_prefix}-adb"
+    compute_instance = "${var.resource_prefix}-instance"
+    vcn = "${var.resource_prefix}-vcn"
+    
+    # Network configuration
+    networking = "VCN with public subnet, Internet Gateway, Security Lists"
+    open_ports = "SSH (22), HTTP (80), HTTPS (443), Flask (5000), Jupyter (8888)"
+    
+    # Database access
+    database_admin_user = "ADMIN"
+    database_service_names = "${var.db_name}_high, ${var.db_name}_medium, ${var.db_name}_low"
+    
+    # Development environment
+    python_version = "Python 3 (latest from Oracle Linux)"
+    oracle_driver = "python-oracledb (Thin mode - no Oracle Client libraries needed)"
+    development_tools = "Flask, Jupyter Notebook, pandas, numpy, matplotlib"
   }
 }
 
@@ -84,9 +88,17 @@ output "resource_summary" {
 # ===================================================================
 
 output "setup_instructions" {
-  description = "Step-by-step setup guide"
+  description = "Complete step-by-step setup guide"
   value = <<-EOT
-  🚀 NEXT STEPS:
+  🚀 DEPLOYMENT COMPLETED SUCCESSFULLY!
+  
+  📋 CONFIGURATION SUMMARY:
+  • Database: ${var.use_always_free_adb ? "Always Free ADB (1 CPU, 20GB)" : "Payable ADB (${var.adb_cpu_core_count} CPUs, ${var.adb_data_storage_size_in_gb}GB)"}
+  • Compute: ${var.use_always_free_compute ? "Always Free (VM.Standard.E2.1.Micro)" : "Custom (${var.instance_shape})"}
+  • Python Driver: python-oracledb (modern, no Oracle Client needed)
+  • Cost: ${var.use_always_free_adb && var.use_always_free_compute ? "$0/month" : "Variable (see cost estimation)"}
+  
+  🔗 NEXT STEPS:
   
   1️⃣ Connect to your instance:
      ssh opc@${oci_core_instance.compute_instance.public_ip}
@@ -99,12 +111,12 @@ output "setup_instructions" {
   3️⃣ Upload wallet to instance:
      scp wallet.zip opc@${oci_core_instance.compute_instance.public_ip}:
   
-  4️⃣ Extract and test:
+  4️⃣ Extract wallet and test connection:
      ssh opc@${oci_core_instance.compute_instance.public_ip}
      unzip wallet.zip -d wallet/
      python3 test_connect.py
   
-  📋 DATABASE CONNECTION INFO:
+  📊 DATABASE CONNECTION INFO:
      • Admin User: ADMIN
      • Password: [The password you provided]
      • Service Names:
@@ -112,38 +124,43 @@ output "setup_instructions" {
        - ${var.db_name}_medium (balanced)
        - ${var.db_name}_low (lowest cost)
   
-  💻 PYTHON CONNECTION EXAMPLE:
-     import oracledb
-     
-     connection = oracledb.connect(
-         user="ADMIN",
-         password="your_password",
-         dsn="${var.db_name}_high",
-         config_dir="/home/opc/wallet"
-     )
-  
-  🐍 AVAILABLE SCRIPTS:
+  🐍 PYTHON EXAMPLES READY TO USE:
      • test_connect.py - Test database connectivity
-     • connection_example.py - Basic connection template  
-     • flask_example.py - Web application example (port 5000)
-     • jupyter_oracle_example.py - Data analysis example
+     • connection_example.py - Basic python-oracledb template
+     • flask_example.py - Web application (http://${oci_core_instance.compute_instance.public_ip}:5000)
+     • jupyter_oracle_example.py - Data analysis template
   
-  🌐 WEB ACCESS:
-     • Flask App: http://${oci_core_instance.compute_instance.public_ip}:5000
+  🌐 WEB ACCESS ENABLED:
+     • HTTP: http://${oci_core_instance.compute_instance.public_ip}
+     • HTTPS: https://${oci_core_instance.compute_instance.public_ip}
+     • Flask Dev: http://${oci_core_instance.compute_instance.public_ip}:5000
      • Jupyter: http://${oci_core_instance.compute_instance.public_ip}:8888
   
-  📊 YOUR CONFIGURATION:
-     • ADB: ${var.use_always_free_adb ? "Always Free (1 CPU, 20GB)" : "Payable (${var.adb_cpu_core_count} CPUs, ${var.adb_data_storage_size_in_gb}GB)"}
-     • Compute: ${var.use_always_free_compute ? "Always Free (E2.1.Micro)" : "Custom (${var.instance_shape})"}
-     • Auto-scaling: ${var.use_always_free_adb ? "Not Available" : (var.adb_auto_scaling_enabled ? "Enabled" : "Disabled")}
+  📦 PRE-INSTALLED PACKAGES:
+     • oracledb - Modern Oracle database driver
+     • flask - Web framework
+     • pandas, numpy - Data analysis
+     • jupyter - Interactive notebooks
+     • matplotlib, seaborn - Data visualization
   
-  💡 MODERN FEATURES:
-     ✅ python-oracledb (latest Oracle driver)
-     ✅ Oracle Database 23ai (latest version)
-     ✅ Thin mode (no Oracle Client install needed)
-     ✅ All web ports open for development
+  💡 PYTHON-ORACLEDB ADVANTAGES:
+     • Thin Mode: No Oracle Client libraries needed
+     • Modern API: Successor to cx_Oracle
+     • Better Performance: Optimized for cloud
+     • Easy Migration: Drop-in replacement for most cx_Oracle code
   
-  ${var.use_always_free_adb && var.use_always_free_compute ? "✅ COMPLETELY FREE: No charges for this deployment!" : "💰 COST MONITORING: Check OCI Console → Billing for usage"}
+  📍 DEPLOYMENT DETAILS:
+     • Region: ${var.region}
+     • Compartment: Current compartment (auto-selected)
+     • Database Version: ${var.adb_version}
+     • Created: ${timestamp()}
+  
+  ${var.use_always_free_adb && var.use_always_free_compute ? "✅ ALWAYS FREE: No charges for this deployment!" : "💰 BILLING ACTIVE: Monitor usage in OCI Console"}
+  
+  🆘 NEED HELP?
+     • Check logs: sudo cat /var/log/oracle-setup.log
+     • Test python-oracledb: python3 -c "import oracledb; print(oracledb.__version__)"
+     • Verify wallet: ls -la wallet/
   EOT
 }
 
@@ -151,14 +168,17 @@ output "setup_instructions" {
 # TECHNICAL DETAILS (for automation/integration)
 # ===================================================================
 
-output "resource_ids" {
-  description = "OCIDs of created resources"
+output "resource_ocids" {
+  description = "OCIDs of all created resources"
   value = {
     compartment_id         = local.current_compartment_id
     vcn_id                 = oci_core_vcn.vcn.id
     subnet_id              = oci_core_subnet.public_subnet.id
     instance_id            = oci_core_instance.compute_instance.id
     autonomous_database_id = oci_database_autonomous_database.adb.id
+    internet_gateway_id    = oci_core_internet_gateway.ig.id
+    route_table_id         = oci_core_route_table.public_rt.id
+    security_list_id       = oci_core_security_list.public_sl.id
   }
 }
 
@@ -169,17 +189,32 @@ output "database_endpoints" {
 }
 
 output "deployment_metadata" {
-  description = "Deployment configuration metadata"
+  description = "Deployment metadata for tracking and automation"
   value = {
-    adb_free_tier_enabled = var.use_always_free_adb
-    compute_free_tier_enabled = var.use_always_free_compute
+    # Configuration flags
+    always_free_adb = var.use_always_free_adb
+    always_free_compute = var.use_always_free_compute
+    
+    # Resource configuration
     resource_prefix = var.resource_prefix
     database_name = var.db_name
     database_workload = var.adb_workload
     database_version = var.adb_version
+    
+    # Capacity configuration
+    adb_cpu_cores = local.actual_adb_cpu_cores
+    adb_storage_gb = local.actual_adb_storage_gb
+    adb_auto_scaling = var.use_always_free_adb ? false : var.adb_auto_scaling_enabled
+    
+    compute_shape = local.actual_instance_shape
+    compute_ocpus = var.use_always_free_compute ? 1 : var.instance_ocpus
+    compute_memory_gb = var.use_always_free_compute ? 1 : var.instance_memory_gb
+    
+    # Technical details
     python_driver = "python-oracledb"
     deployment_time = timestamp()
-    configuration_summary = "${var.use_always_free_adb ? "Free" : "Payable"}_ADB_${var.use_always_free_compute ? "Free" : "Custom"}_Compute"
+    terraform_version = ">=1.0"
+    stack_version = "3.0"
   }
 }# ===================================================================
 # CONNECTION INFORMATION
