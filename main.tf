@@ -200,7 +200,7 @@ resource "oci_core_instance" "compute_instance" {
   metadata = {
     ssh_authorized_keys = var.ssh_public_key
     user_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
-      db_password = var.db_admin_password
+      admin_password = var.db_admin_password
     }))
   }
 
