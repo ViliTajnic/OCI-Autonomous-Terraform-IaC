@@ -1,46 +1,92 @@
+# Configure the Oracle Cloud Infrastructure Provider
 terraform {
+  required_version = ">= 1.0"
   required_providers {
     oci = {
-      source = "oracle/oci"
+      source  = "oracle/oci"
+      version = ">= 4.67.3"
     }
   }
 }
 
-# Get current compartment and availability domain
+# Provider configuration - handles both local development and OCI Resource Manager
+provider "oci" {
+  # For OCI Resource Manager - uses instance principal authentication
+  # For local development - uses config file or environment variables
+  tenancy_ocid     = var.tenancy_ocid
+  region           = var.region
+  
+  # Use config_file_profile for local development (when not in OCI RM)
+  # This will be ignored in OCI Resource Manager
+  config_file_profile = var.config_file_profile
+}
+
+# Get current compartment from the execution context
+# OCI Resource Manager automatically provides compartment_ocid
+locals {
+  # Use the compartment where the stack is being executed
+  current_compartment_id = var.compartment_ocid
+}
+
 data "oci_identity_availability_domain" "ad" {
-  compartment_id = var.compartment_ocid
+  compartment_id = local.current_compartment_id
   ad_number      = 1
 }
 
-data "oci_core_images" "ol8_images" {
-  compartment_id           = var.compartment_ocid
+data "oci_core_images" "compute_images" {
+  compartment_id           = local.current_compartment_id
   operating_system         = "Oracle Linux"
   operating_system_version = "8"
-  shape                    = var.use_free_tier ? "VM.Standard.E2.1.Micro" : "VM.Standard.E4.Flex"
+  shape                    = local.actual_instance_shape
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
 }
 
+# Local values for conditional logic
+locals {
+  # Always Free tier configurations
+  free_tier_compute_shape = "VM.Standard.E2.1.Micro"
+  free_tier_adb_cpu_cores = 1
+  free_tier_adb_storage_gb = 20
+
+  # Determine actual compute configuration
+  actual_instance_shape = var.use_always_free_compute ? local.free_tier_compute_shape : var.instance_shape
+  
+  # Determine actual ADB configuration
+  actual_adb_cpu_cores = var.use_always_free_adb ? local.free_tier_adb_cpu_cores : var.adb_cpu_core_count
+  actual_adb_storage_gb = var.use_always_free_adb ? local.free_tier_adb_storage_gb : var.adb_data_storage_size_in_gb
+  
+  # Auto-scaling only available for payable tier
+  adb_auto_scaling_enabled = var.use_always_free_adb ? false : var.adb_auto_scaling_enabled
+  adb_max_cpu_core_count = var.use_always_free_adb ? null : (var.adb_auto_scaling_enabled ? var.adb_auto_scaling_max_cpu_core_count : null)
+}
+
 # VCN
 resource "oci_core_vcn" "vcn" {
-  compartment_id = var.compartment_ocid
-  display_name   = "${var.project_name}-vcn"
+  compartment_id = local.current_compartment_id
+  display_name   = "${var.resource_prefix}-vcn"
   cidr_block     = "10.0.0.0/16"
   dns_label      = "pythonvcn"
+
+  freeform_tags = {
+    "Environment" = var.use_always_free_adb ? "Development" : "Production"
+    "ADB_Tier"    = var.use_always_free_adb ? "Always-Free" : "Payable"
+    "Compute_Tier" = var.use_always_free_compute ? "Always-Free" : "Custom"
+  }
 }
 
 # Internet Gateway
 resource "oci_core_internet_gateway" "ig" {
-  compartment_id = var.compartment_ocid
+  compartment_id = local.current_compartment_id
   vcn_id         = oci_core_vcn.vcn.id
-  display_name   = "${var.project_name}-ig"
+  display_name   = "${var.resource_prefix}-ig"
 }
 
-# Route Table
-resource "oci_core_route_table" "rt" {
-  compartment_id = var.compartment_ocid
+# Route table
+resource "oci_core_route_table" "public_rt" {
+  compartment_id = local.current_compartment_id
   vcn_id         = oci_core_vcn.vcn.id
-  display_name   = "${var.project_name}-rt"
+  display_name   = "${var.resource_prefix}-public-rt"
 
   route_rules {
     destination       = "0.0.0.0/0"
@@ -48,11 +94,11 @@ resource "oci_core_route_table" "rt" {
   }
 }
 
-# Security List
-resource "oci_core_security_list" "sl" {
-  compartment_id = var.compartment_ocid
+# Security list
+resource "oci_core_security_list" "public_sl" {
+  compartment_id = local.current_compartment_id
   vcn_id         = oci_core_vcn.vcn.id
-  display_name   = "${var.project_name}-sl"
+  display_name   = "${var.resource_prefix}-public-sl"
 
   # Outbound traffic
   egress_security_rules {
@@ -60,9 +106,9 @@ resource "oci_core_security_list" "sl" {
     protocol    = "all"
   }
 
-  # SSH
+  # SSH access
   ingress_security_rules {
-    protocol = "6"
+    protocol = "6" # TCP
     source   = "0.0.0.0/0"
     tcp_options {
       min = 22
@@ -70,9 +116,9 @@ resource "oci_core_security_list" "sl" {
     }
   }
 
-  # HTTP
+  # HTTP access (always enabled for web development)
   ingress_security_rules {
-    protocol = "6"
+    protocol = "6" # TCP
     source   = "0.0.0.0/0"
     tcp_options {
       min = 80
@@ -80,9 +126,9 @@ resource "oci_core_security_list" "sl" {
     }
   }
 
-  # HTTPS
+  # HTTPS access (always enabled for web development)
   ingress_security_rules {
-    protocol = "6"
+    protocol = "6" # TCP
     source   = "0.0.0.0/0"
     tcp_options {
       min = 443
@@ -90,95 +136,132 @@ resource "oci_core_security_list" "sl" {
     }
   }
 
-  # Flask (5000)
+  # Flask development port (always enabled)
   ingress_security_rules {
-    protocol = "6"
+    protocol = "6" # TCP
     source   = "0.0.0.0/0"
     tcp_options {
       min = 5000
       max = 5000
     }
   }
+
+  # Jupyter notebook port (always enabled)
+  ingress_security_rules {
+    protocol = "6" # TCP
+    source   = "0.0.0.0/0"
+    tcp_options {
+      min = 8888
+      max = 8888
+    }
+  }
 }
 
-# Public Subnet
+# Public subnet
 resource "oci_core_subnet" "public_subnet" {
-  compartment_id             = var.compartment_ocid
+  compartment_id             = local.current_compartment_id
   vcn_id                     = oci_core_vcn.vcn.id
-  display_name               = "${var.project_name}-subnet"
+  display_name               = "${var.resource_prefix}-public-subnet"
   cidr_block                 = "10.0.1.0/24"
   dns_label                  = "publicsubnet"
-  route_table_id             = oci_core_route_table.rt.id
-  security_list_ids          = [oci_core_security_list.sl.id]
+  route_table_id             = oci_core_route_table.public_rt.id
+  security_list_ids          = [oci_core_security_list.public_sl.id]
   prohibit_public_ip_on_vnic = false
 }
 
-# Compute Instance
-resource "oci_core_instance" "python_instance" {
+# Compute instance
+resource "oci_core_instance" "compute_instance" {
   availability_domain = data.oci_identity_availability_domain.ad.name
-  compartment_id      = var.compartment_ocid
-  display_name        = "${var.project_name}-instance"
-  shape               = var.use_free_tier ? "VM.Standard.E2.1.Micro" : "VM.Standard.E4.Flex"
+  compartment_id      = local.current_compartment_id
+  display_name        = "${var.resource_prefix}-instance"
+  shape               = local.actual_instance_shape
 
-  # Only configure shape_config for paid tier
+  # Shape configuration (only for custom compute instances)
   dynamic "shape_config" {
-    for_each = var.use_free_tier ? [] : [1]
+    for_each = var.use_always_free_compute ? [] : [1]
     content {
-      ocpus         = var.compute_ocpus
-      memory_in_gbs = var.compute_memory_gb
+      ocpus         = var.instance_ocpus
+      memory_in_gbs = var.instance_memory_gb
     }
   }
 
   create_vnic_details {
     subnet_id        = oci_core_subnet.public_subnet.id
-    display_name     = "${var.project_name}-vnic"
+    display_name     = "${var.resource_prefix}-vnic"
     assign_public_ip = true
+    hostname_label   = "pythonhost"
   }
 
   source_details {
     source_type = "image"
-    source_id   = data.oci_core_images.ol8_images.images[0].id
+    source_id   = data.oci_core_images.compute_images.images[0].id
   }
 
   metadata = {
     ssh_authorized_keys = var.ssh_public_key
     user_data = base64encode(templatefile("${path.module}/cloud-init.yaml", {
-      admin_password = var.admin_password
+      db_password = var.db_admin_password
     }))
   }
 
   freeform_tags = {
-    "Project"     = var.project_name
-    "Environment" = var.use_free_tier ? "Free" : "Paid"
-    "CreatedBy"   = "Terraform"
+    "Environment" = var.use_always_free_adb ? "Development" : "Production"
+    "ADB_Tier"    = var.use_always_free_adb ? "Always-Free" : "Payable"
+    "Compute_Tier" = var.use_always_free_compute ? "Always-Free" : "Custom"
+    "Shape"       = local.actual_instance_shape
   }
 }
 
 # Autonomous Database
 resource "oci_database_autonomous_database" "adb" {
-  compartment_id = var.compartment_ocid
+  compartment_id = local.current_compartment_id
   
-  # Basic configuration
-  db_name        = var.database_name
-  display_name   = "${var.project_name}-adb"
-  admin_password = var.admin_password
+  # Core configuration
+  cpu_core_count = local.actual_adb_cpu_cores
   
-  # Conditional configuration based on free/paid tier
-  cpu_core_count          = var.use_free_tier ? 1 : var.adb_cpu_cores
-  data_storage_size_in_gb = var.use_free_tier ? 20 : var.adb_storage_gb
-  is_free_tier            = var.use_free_tier
+  # Storage configuration
+  data_storage_size_in_gb = local.actual_adb_storage_gb
   
-  # Auto-scaling only for paid tier
-  is_auto_scaling_enabled = var.use_free_tier ? false : var.enable_auto_scaling
+  db_name        = var.db_name
+  admin_password = var.db_admin_password
+  display_name   = "${var.resource_prefix}-adb"
   
-  # Database settings
-  db_version    = "23ai"
-  db_workload   = "OLTP"
-  license_model = "LICENSE_INCLUDED"
+  # Database settings - Always use 23ai for latest features
+  db_version    = var.adb_version
+  db_workload   = var.adb_workload
+  license_model = var.adb_license_model
+  
+  # Free tier setting
+  is_free_tier = var.use_always_free_adb
+  
+  # Auto-scaling configuration (payable tier only)
+  is_auto_scaling_enabled = local.adb_auto_scaling_enabled
+  auto_scaling_max_cpu_core_count = local.adb_max_cpu_core_count
+  
+  # Enhanced security and networking
+  subnet_id                = oci_core_subnet.public_subnet.id
+  whitelisted_ips          = ["0.0.0.0/0"]
+  are_primary_whitelisted_ips_used = true
+  
+  # Additional configuration
+  is_dedicated = false
 
   freeform_tags = {
-    "Project"     = var.project_name
-    "Environment" = var.use_free_tier ? "Free" : "Paid"
+    "Environment" = var.use_always_free_adb ? "Development" : "Production"
+    "ADB_Tier"    = var.use_always_free_adb ? "Always-Free" : "Payable"
+    "Compute_Tier" = var.use_always_free_compute ? "Always-Free" : "Custom"
+    "Workload"    = var.adb_workload
+    "Version"     = var.adb_version
     "CreatedBy"   = "Terraform"
+    "CPU_Cores"   = tostring(local.actual_adb_cpu_cores)
+    "Storage_GB"  = tostring(local.actual_adb_storage_gb)
+    "Auto_Scaling" = var.use_always_free_adb ? "Not_Available" : (var.adb_auto_scaling_enabled ? "Enabled" : "Disabled")
+  }
+  
+  # Lifecycle management
+  lifecycle {
+    ignore_changes = [
+      defined_tags
+    ]
   }
 }
