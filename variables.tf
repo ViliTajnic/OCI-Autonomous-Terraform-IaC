@@ -10,37 +10,41 @@ variable "compartment_id" {
 }
 
 variable "adb_admin_password" {
-  description = "Admin password for Autonomous Database"
+  description = "Admin password for Autonomous Database (must meet complexity rules)"
   type        = string
   sensitive   = true
 }
 
+# Only used when not using free tier
 variable "adb_cpu_core_count" {
-  description = "CPU core count for ADB (only used when not in free tier)"
-  type        = number
-  default     = 1
+  type    = number
+  default = 1
 }
 
 variable "adb_data_storage_size_in_tbs" {
-  description = "Storage size in TBs for ADB (only used when not in free tier)"
-  type        = number
-  default     = 1
+  type    = number
+  default = 1
 }
 
 variable "compute_shape" {
-  description = "Shape for compute instance"
-  type        = string
-  default     = "VM.Standard.E4.Flex"
+  type    = string
+  default = "VM.Standard.E4.Flex"
 }
 
 variable "compute_ocpus" {
-  description = "OCPUs for compute"
-  type        = number
-  default     = 1
+  type    = number
+  default = 1
 }
 
 variable "compute_memory_in_gbs" {
-  description = "Memory in GB for compute"
-  type        = number
-  default     = 8
+  type    = number
+  default = 8
+}
+
+locals {
+  adb_cpu_core_count          = var.use_free_tier ? 1 : var.adb_cpu_core_count
+  adb_data_storage_size_in_tbs = var.use_free_tier ? 1 : var.adb_data_storage_size_in_tbs
+  compute_shape               = var.use_free_tier ? "VM.Standard.A1.Flex" : var.compute_shape
+  compute_ocpus               = var.use_free_tier ? 1 : var.compute_ocpus
+  compute_memory_in_gbs       = var.use_free_tier ? 1 : var.compute_memory_in_gbs
 }
