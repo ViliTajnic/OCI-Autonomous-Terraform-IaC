@@ -3,23 +3,12 @@ data "oci_identity_availability_domains" "ads" {
 }
 
 data "oci_core_images" "latest" {
-  compartment_id           = var.compartment_id
-  operating_system         = "Oracle Linux"
+  compartment_id = var.compartment_id
+  operating_system = "Oracle Linux"
   operating_system_version = "8"
-  shape                    = var.use_free_tier ? "VM.Standard.A1.Flex" : var.compute_shape
-  sort_by                  = "TIMECREATED"
-  sort_order               = "DESC"
-}
-
-resource "oci_database_autonomous_database" "adb" {
-  compartment_id             = var.compartment_id
-  db_name                    = "myadb"
-  admin_password             = var.adb_admin_password
-  cpu_core_count             = var.use_free_tier ? 1 : var.adb_cpu_core_count
-  data_storage_size_in_tbs   = var.use_free_tier ? 1 : var.adb_data_storage_size_in_tbs
-  db_workload                = "OLTP"
-  is_free_tier               = var.use_free_tier
-  is_auto_scaling_enabled    = false
+  shape = var.use_free_tier ? "VM.Standard.A1.Flex" : var.compute_shape
+  sort_by = "TIMECREATED"
+  sort_order = "DESC"
 }
 
 resource "oci_core_instance" "vm" {
