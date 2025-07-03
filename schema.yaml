@@ -1,217 +1,145 @@
-title: "Oracle Autonomous Database + Python Stack"
-description: "Deploy Oracle Autonomous Database with Python environment. Always Free tier by default."
-informationalText: "✅ Always Free tier is enabled by default (perfect for development). Uncheck 'Enable Free Tier' only if you need production resources and understand billing implications."
+title: "Simple Oracle ADB + Python Stack"
+description: "Deploy Oracle Autonomous Database with Python using python-oracledb. Choose FREE or PAID resources."
+informationalText: "✅ Always Free tier selected by default ($0 cost). Uncheck for paid resources with custom sizing."
 schemaVersion: 1.1.0
-version: "2.0"
+version: "1.0"
 locale: "en"
 
-# Variable Groups for better UI organization
 variableGroups:
-  - title: "🔧 Required Configuration"
+  - title: "🔑 Required Information"
     visible: true
     variables:
-      - compartment_id
       - ssh_public_key
-      - db_admin_password
+      - admin_password
 
-  - title: "⚡ Deployment Mode"
+  - title: "⚙️ Deployment Mode"
     visible: true
     variables:
-      - enable_free_tier
+      - use_free_tier
 
-  - title: "📝 Basic Settings (Optional)"
+  - title: "📝 Basic Settings"
     visible: true
     variables:
-      - resource_prefix
-      - db_name
-      - enable_web_access
+      - project_name
+      - database_name
 
   - title: "💰 Paid Tier Configuration"
     visible:
       not:
-        - ${enable_free_tier}
+        - ${use_free_tier}
     variables:
-      - compute_shape
       - compute_ocpus
       - compute_memory_gb
-      - database_ocpus
-      - database_storage_tb
+      - adb_cpu_cores
+      - adb_storage_gb
       - enable_auto_scaling
 
-  - title: "🔧 Advanced Options"
-    visible:
-      not:
-        - ${enable_free_tier}
-    variables:
-      - database_version
-      - database_workload
-      - license_model
-
-# Variable Definitions
 variables:
-  # ===================================================================
-  # REQUIRED CONFIGURATION
-  # ===================================================================
-  
-  compartment_id:
-    type: oci:identity:compartment:id
-    title: "Compartment"
-    description: "Select the compartment where all resources will be created"
-    required: true
+  # Hide auto-provided variables
+  compartment_ocid:
+    type: string
+    visible: false
+    required: false
 
+  tenancy_ocid:
+    type: string
+    visible: false
+    required: false
+
+  region:
+    type: string
+    visible: false
+    required: false
+
+  # Required inputs
   ssh_public_key:
     type: oci:core:ssh:publickey
     title: "SSH Public Key"
     description: "Your SSH public key to access the compute instance"
     required: true
-    additionalProps:
-      allowMultiple: false
 
-  db_admin_password:
+  admin_password:
     type: password
-    title: "Database Admin Password"
-    description: "Password for the database ADMIN user (8+ characters, include uppercase, lowercase, number)"
+    title: "Admin Password"
+    description: "Password for database ADMIN user (8+ characters)"
     required: true
     minLength: 8
     maxLength: 30
-    pattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).*$"
 
-  # ===================================================================
-  # DEPLOYMENT MODE
-  # ===================================================================
-
-  enable_free_tier:
+  # Deployment mode
+  use_free_tier:
     type: boolean
-    title: "✅ Enable Always Free Tier"
-    description: "Keep this CHECKED for free development environment. Uncheck only for production with billing."
+    title: "✅ Use Always Free Resources"
+    description: "Keep CHECKED for free resources ($0/month). UNCHECK for paid resources with custom sizing."
     default: true
 
-  # ===================================================================
-  # BASIC SETTINGS
-  # ===================================================================
-
-  resource_prefix:
+  # Basic settings
+  project_name:
     type: string
-    title: "Resource Name Prefix"
-    description: "Prefix for all resource names (optional)"
+    title: "Project Name"
+    description: "Name prefix for all resources"
     default: "python-oracle"
     pattern: "^[a-zA-Z][a-zA-Z0-9-]*$"
     maxLength: 20
 
-  db_name:
+  database_name:
     type: string
     title: "Database Name"
-    description: "Name for the Autonomous Database"
-    default: "PYTHONADB"
+    description: "Autonomous Database name"
+    default: "PYTHONDB"
     pattern: "^[A-Za-z][A-Za-z0-9]*$"
     maxLength: 14
 
-  enable_web_access:
-    type: boolean
-    title: "Enable Web Ports"
-    description: "Open HTTP (80) and HTTPS (443) ports for web applications"
-    default: false
-
-  # ===================================================================
-  # PAID TIER CONFIGURATION (Only visible when free tier is disabled)
-  # ===================================================================
-
-  compute_shape:
-    type: enum
-    title: "Compute Instance Shape"
-    description: "Instance type for compute resources"
-    default: "VM.Standard.E4.Flex"
-    enum:
-      - "VM.Standard.E3.Flex"
-      - "VM.Standard.E4.Flex"
-      - "VM.Standard.A1.Flex"
-      - "VM.Standard3.Flex"
-
+  # Paid tier configuration
   compute_ocpus:
     type: number
     title: "Compute OCPUs"
-    description: "Number of OCPUs for the compute instance"
+    description: "Number of OCPUs for compute instance"
     default: 2
     minimum: 1
-    maximum: 64
+    maximum: 32
 
   compute_memory_gb:
     type: number
     title: "Compute Memory (GB)"
-    description: "Amount of memory in GB"
+    description: "Memory in GB for compute instance"
     default: 16
     minimum: 1
-    maximum: 1024
+    maximum: 512
 
-  database_ocpus:
+  adb_cpu_cores:
     type: number
-    title: "Database OCPUs"
-    description: "Number of OCPUs for Autonomous Database"
+    title: "Database CPU Cores"
+    description: "Number of CPU cores for Autonomous Database"
     default: 2
     minimum: 1
     maximum: 128
 
-  database_storage_tb:
+  adb_storage_gb:
     type: number
-    title: "Database Storage (TB)"
-    description: "Storage size in terabytes"
-    default: 1
-    minimum: 1
-    maximum: 384
+    title: "Database Storage (GB)"
+    description: "Storage in GB for Autonomous Database"
+    default: 1024
+    minimum: 20
+    maximum: 393216
 
   enable_auto_scaling:
     type: boolean
     title: "Enable Auto Scaling"
-    description: "Automatically scale database CPU based on workload"
+    description: "Enable auto-scaling for the database"
     default: false
 
-  # ===================================================================
-  # ADVANCED OPTIONS
-  # ===================================================================
-
-  database_version:
-    type: enum
-    title: "Database Version"
-    description: "Oracle Database version"
-    default: "19c"
-    enum:
-      - "19c"
-      - "21c"
-      - "23ai"
-
-  database_workload:
-    type: enum
-    title: "Database Workload Type"
-    description: "Type of database workload"
-    default: "OLTP"
-    enum:
-      - "OLTP"
-      - "DW"
-      - "AJD"
-
-  license_model:
-    type: enum
-    title: "License Model"
-    description: "Database license model"
-    default: "LICENSE_INCLUDED"
-    enum:
-      - "LICENSE_INCLUDED"
-      - "BRING_YOUR_OWN_LICENSE"
-
-# Output Groups for organized results
 outputGroups:
-  - title: "🔗 Connection Information"
+  - title: "🔗 Connection"
     outputs:
-      - instance_public_ip
-      - ssh_connection_command
-      - database_connection_strings
+      - instance_ip
+      - ssh_command
+      - connection_strings
 
-  - title: "📊 Deployment Summary"
+  - title: "📊 Summary"
     outputs:
-      - deployment_tier
-      - resource_configuration
-      - estimated_monthly_cost
+      - deployment_summary
 
-  - title: "🚀 Next Steps"
+  - title: "🚀 Get Started"
     outputs:
-      - setup_instructions
+      - next_steps
