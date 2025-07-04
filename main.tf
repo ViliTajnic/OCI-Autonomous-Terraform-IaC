@@ -42,7 +42,7 @@ data "oci_core_images" "compute_images" {
 
 # Get available database versions for the compartment
 data "oci_database_autonomous_db_versions" "available_versions" {
-  compartment_id = local.current_compartment_id
+  compartment_id = var.compartment_ocid
   db_workload    = var.adb_workload
 }
 
