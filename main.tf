@@ -220,9 +220,10 @@ resource "oci_database_autonomous_database" "adb" {
   # Core configuration based on tier selection
   cpu_core_count = local.actual_adb_cpu_cores
   
-  # Storage configuration - Always Free uses GB, Payable can use TB
-  data_storage_size_in_gb = var.use_always_free_adb ? local.free_tier_adb_storage_gb : (var.adb_data_storage_size_in_gb <= 1024 ? var.adb_data_storage_size_in_gb : null)
-  data_storage_size_in_tbs = var.use_always_free_adb ? null : (var.adb_data_storage_size_in_gb > 1024 ? ceil(var.adb_data_storage_size_in_gb / 1024) : null)
+  # Storage configuration - Always Free uses GB, Payable uses TB
+  # OCPU compute model requires TB, ECPU compute model allows GB
+  data_storage_size_in_gb = var.use_always_free_adb ? local.free_tier_adb_storage_gb : null
+  data_storage_size_in_tbs = var.use_always_free_adb ? null : max(1, ceil(var.adb_data_storage_size_in_gb / 1024))
   
   # Database configuration
   display_name   = "${var.resource_prefix}-adb"
@@ -272,7 +273,7 @@ resource "oci_database_autonomous_database" "adb" {
     "Version"     = var.adb_version
     "CreatedBy"   = "Terraform"
     "CPU_Cores"   = tostring(local.actual_adb_cpu_cores)
-    "Storage_Size" = var.use_always_free_adb ? "20GB" : "${var.adb_data_storage_size_in_gb}GB"
+    "Storage_Size" = var.use_always_free_adb ? "20GB" : "${max(1, ceil(var.adb_data_storage_size_in_gb / 1024))}TB"
     "Auto_Scaling" = var.use_always_free_adb ? "Not_Available" : (var.adb_auto_scaling_enabled ? "Enabled" : "Disabled")
     "MTLS_Required" = "true"
     "Python_Driver" = "python-oracledb"

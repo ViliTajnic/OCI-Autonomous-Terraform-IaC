@@ -91,12 +91,12 @@ variable "adb_cpu_core_count" {
 }
 
 variable "adb_data_storage_size_in_gb" {
-  description = "Database storage in GB for payable tier (minimum 20GB)"
+  description = "Database storage in GB for payable tier (will be converted to TB for OCPU model, minimum 1024GB)"
   type        = number
   default     = 1024
   validation {
-    condition     = var.adb_data_storage_size_in_gb >= 20 && var.adb_data_storage_size_in_gb <= 393216
-    error_message = "ADB storage must be between 20GB and 393,216GB (384TB)."
+    condition     = var.adb_data_storage_size_in_gb >= 1024 && var.adb_data_storage_size_in_gb <= 393216
+    error_message = "ADB storage must be between 1024GB (1TB) and 393,216GB (384TB) for payable tier."
   }
 }
 
