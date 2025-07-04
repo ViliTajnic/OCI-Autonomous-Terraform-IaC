@@ -40,8 +40,17 @@ data "oci_core_images" "compute_images" {
   sort_order               = "DESC"
 }
 
+# Get available database versions for the compartment
+data "oci_database_autonomous_db_versions" "available_versions" {
+  compartment_id = local.current_compartment_id
+  db_workload    = var.adb_workload
+}
+
 # Local values for conditional logic
 locals {
+  # Use the compartment where the stack is being executed
+  current_compartment_id = var.compartment_ocid
+  
   # Always Free tier configurations
   free_tier_compute_shape = "VM.Standard.E2.1.Micro"
   free_tier_adb_cpu_cores = 1
@@ -56,7 +65,12 @@ locals {
   
   # Auto-scaling only available for payable tier
   adb_auto_scaling_enabled = var.use_always_free_adb ? false : var.adb_auto_scaling_enabled
-  adb_max_cpu_core_count = var.use_always_free_adb ? null : (var.adb_auto_scaling_enabled ? var.adb_auto_scaling_max_cpu_core_count : null)
+  
+  # Determine the best available database version (prefer 23ai, fall back to latest available)
+  available_db_versions = [for v in data.oci_database_autonomous_db_versions.available_versions.autonomous_db_versions : v.version]
+  best_db_version = contains(local.available_db_versions, "23ai") ? "23ai" : (
+    contains(local.available_db_versions, "21c") ? "21c" : "19c"
+  )
 }
 
 # VCN
@@ -224,9 +238,9 @@ resource "oci_database_autonomous_database" "adb" {
   data_storage_size_in_gb = var.use_always_free_adb ? local.free_tier_adb_storage_gb : null
   data_storage_size_in_tbs = var.use_always_free_adb ? null : max(1, ceil(var.adb_data_storage_size_in_gb / 1024))
   
-  # Basic database configuration with 23ai
+  # Basic database configuration with auto-detected version
   display_name   = "${var.resource_prefix}-adb"
-  db_version     = "23ai"  # Keep 23ai as requested
+  db_version     = local.best_db_version  # Auto-detected best available version
   db_workload    = var.adb_workload
   license_model  = var.adb_license_model
   
@@ -247,7 +261,7 @@ resource "oci_database_autonomous_database" "adb" {
     "ADB_Tier"    = var.use_always_free_adb ? "Always-Free" : "Payable"
     "Compute_Tier" = var.use_always_free_compute ? "Always-Free" : "Custom"
     "Workload"    = var.adb_workload
-    "Version"     = "23ai"
+    "Version"     = local.best_db_version
     "CreatedBy"   = "Terraform"
     "Python_Driver" = "python-oracledb"
   }

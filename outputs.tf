@@ -27,9 +27,14 @@ output "database_connection_urls" {
   sensitive   = false
 }
 
-output "database_admin_password_note" {
-  description = "Note about the database admin password"
-  value       = "Database admin password is the one you provided during deployment. Username: ADMIN"
+output "database_version_info" {
+  description = "Information about the selected database version"
+  value = {
+    requested_version = "23ai (preferred)"
+    available_versions = data.oci_database_autonomous_db_versions.available_versions.autonomous_db_versions[*].version
+    selected_version = local.best_db_version
+    version_note = local.best_db_version == "23ai" ? "✅ Using latest Oracle 23ai" : "⚠️ 23ai not available, using ${local.best_db_version}"
+  }
 }
 
 # ===================================================================
