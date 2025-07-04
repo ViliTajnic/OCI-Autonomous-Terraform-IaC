@@ -9,8 +9,14 @@ terraform {
   }
 }
 
-# OCI Resource Manager automatically configures the provider
-# No explicit provider block needed for OCI RM deployment
+# Provider configuration for OCI Resource Manager
+provider "oci" {
+  # Use instance principal authentication (for OCI Resource Manager)
+  auth = "InstancePrincipal"
+  
+  # Region will be automatically detected from the OCI RM job context
+  # No need to specify region, tenancy_ocid, etc. for Instance Principal auth
+}
 
 # Get current compartment from the execution context
 # OCI Resource Manager automatically provides compartment_ocid
