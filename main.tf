@@ -11,11 +11,12 @@ terraform {
 
 # Provider configuration for OCI Resource Manager
 provider "oci" {
-  # Use instance principal authentication (for OCI Resource Manager)
-  auth = "InstancePrincipal"
+  # Standard OCI Resource Manager configuration
+  tenancy_ocid = var.tenancy_ocid
+  region       = var.region
   
-  # Region will be automatically detected from the OCI RM job context
-  # No need to specify region, tenancy_ocid, etc. for Instance Principal auth
+  # OCI Resource Manager will automatically use Instance Principal authentication
+  # when these variables are provided but no other auth method is specified
 }
 
 # Get current compartment from the execution context

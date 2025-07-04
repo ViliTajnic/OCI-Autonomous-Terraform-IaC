@@ -11,13 +11,13 @@ variable "compartment_ocid" {
 variable "tenancy_ocid" {
   description = "Tenancy OCID (automatically provided by OCI Resource Manager)"
   type        = string
-  default     = ""
+  default     = null
 }
 
 variable "region" {
   description = "Region (automatically provided by OCI Resource Manager)"
   type        = string
-  default     = ""
+  default     = null
 }
 
 variable "config_file_profile" {
