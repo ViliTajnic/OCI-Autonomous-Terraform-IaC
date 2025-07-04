@@ -57,11 +57,8 @@ variables:
     required: false
 
   # Remove all the advanced options that we're not using
-  # - adb_auto_scaling_for_storage_enabled
-  # - adb_database_management_status
-  # - adb_operations_insights_status  
-  # - adb_maintenance_schedule_type
-  # - adb_backup_retention_period_in_days
+  # Database version is hardcoded to 23ai in variables.tf
+  # No UI option needed for version selection
 
   # ===================================================================
   # REQUIRED CONFIGURATION
