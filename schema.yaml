@@ -1,82 +1,99 @@
 title: "Oracle Autonomous Database + Python Stack"
-description: "Deploy Oracle Autonomous Database with Python environment. Always Free tier by default."
-informationalText: "✅ Always Free tier is enabled by default (perfect for development). Uncheck 'Enable Free Tier' only if you need production resources and understand billing implications."
+description: "Deploy Oracle Autonomous Database 23ai with Python environment using modern python-oracledb driver. Choose between Always Free or Payable ADB with basic configuration."
+informationalText: "✅ Always Free ADB enabled by default ($0 cost). Switch to Payable ADB for custom CPU/storage. Uses Oracle 23ai and python-oracledb (modern successor to cx_Oracle)."
 schemaVersion: 1.1.0
-version: "2.0"
+version: "3.1"
 locale: "en"
 
 # Variable Groups for better UI organization
 variableGroups:
-  - title: "🔧 Required Configuration"
+  - title: "🔧 Required Configuration (Only 2 inputs needed!)"
     visible: true
     variables:
-      - compartment_id
       - ssh_public_key
       - db_admin_password
 
-  - title: "⚡ Deployment Mode"
+  - title: "💾 Database Configuration"
     visible: true
     variables:
-      - enable_free_tier
+      - use_always_free_adb
+      - db_name
 
-  - title: "📝 Basic Settings (Optional)"
+  - title: "🖥️ Compute Configuration"
+    visible: true
+    variables:
+      - use_always_free_compute
+
+  - title: "💰 Payable ADB Settings (Basic Configuration)"
+    visible:
+      not:
+        - ${use_always_free_adb}
+    variables:
+      - adb_cpu_core_count
+      - adb_data_storage_size_in_gb
+      - adb_auto_scaling_enabled
+      - adb_auto_scaling_max_cpu_core_count
+
+  - title: "🖥️ Custom Compute Settings"
+    visible:
+      not:
+        - ${use_always_free_compute}
+    variables:
+      - instance_shape
+      - instance_ocpus
+      - instance_memory_gb
+
+  - title: "📝 Optional Settings"
     visible: true
     variables:
       - resource_prefix
-      - db_name
-      - enable_web_access
 
-  - title: "💰 Paid Tier Configuration"
+  - title: "🔧 Basic Database Options"
     visible:
       not:
-        - ${enable_free_tier}
+        - ${use_always_free_adb}
     variables:
-      - compute_shape
-      - compute_ocpus
-      - compute_memory_gb
-      - database_ocpus
-      - database_storage_tb
-      - enable_auto_scaling
+      - adb_workload
+      - adb_license_model
 
-  - title: "🔧 Advanced Options"
-    visible:
-      not:
-        - ${enable_free_tier}
-    variables:
-      - database_version
-      - database_workload
-      - license_model
-
-# Variable Definitions
+# Variable Definitions - CLEAN AND SIMPLE
 variables:
-  config_file_profile:
+  # ===================================================================
+  # HIDE AUTOMATIC VARIABLES FROM UI
+  # ===================================================================
+  
+  compartment_ocid:
     type: string
-    title: "Config File Profile"
-    description: "OCI config file profile (for local development only)"
     visible: false
     required: false
 
-  # Remove all the advanced options that we're not using
-  # Database version is hardcoded to 23ai in variables.tf
-  # No UI option needed for version selection
+  tenancy_ocid:
+    type: string
+    visible: false
+    required: false
+
+  region:
+    type: string
+    visible: false
+    required: false
+
+  config_file_profile:
+    type: string
+    visible: false
+    required: false
+
+  # Database version is hardcoded in variables.tf - completely removed from schema
+  # adb_version: REMOVED - not in schema at all
 
   # ===================================================================
   # REQUIRED CONFIGURATION
   # ===================================================================
-  
-  compartment_id:
-    type: oci:identity:compartment:id
-    title: "Compartment"
-    description: "Select the compartment where all resources will be created"
-    required: true
 
   ssh_public_key:
     type: oci:core:ssh:publickey
     title: "SSH Public Key"
     description: "Your SSH public key to access the compute instance"
     required: true
-    additionalProps:
-      allowMultiple: false
 
   db_admin_password:
     type: password
@@ -85,29 +102,16 @@ variables:
     required: true
     minLength: 8
     maxLength: 30
-    pattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).*$"
 
   # ===================================================================
-  # DEPLOYMENT MODE
+  # DATABASE CONFIGURATION
   # ===================================================================
 
-  enable_free_tier:
+  use_always_free_adb:
     type: boolean
-    title: "✅ Enable Always Free Tier"
-    description: "Keep this CHECKED for free development environment. Uncheck only for production with billing."
+    title: "✅ Use Always Free Autonomous Database"
+    description: "Keep CHECKED for free ADB (1 CPU, 20GB). UNCHECK for payable ADB with custom CPU/storage."
     default: true
-
-  # ===================================================================
-  # BASIC SETTINGS
-  # ===================================================================
-
-  resource_prefix:
-    type: string
-    title: "Resource Name Prefix"
-    description: "Prefix for all resource names (optional)"
-    default: "python-oracle"
-    pattern: "^[a-zA-Z][a-zA-Z0-9-]*$"
-    maxLength: 20
 
   db_name:
     type: string
@@ -117,17 +121,55 @@ variables:
     pattern: "^[A-Za-z][A-Za-z0-9]*$"
     maxLength: 14
 
-  enable_web_access:
+  # ===================================================================
+  # COMPUTE CONFIGURATION
+  # ===================================================================
+
+  use_always_free_compute:
     type: boolean
-    title: "Enable Web Ports"
-    description: "Open HTTP (80) and HTTPS (443) ports for web applications"
+    title: "✅ Use Always Free Compute"
+    description: "Keep CHECKED for free compute (VM.Standard.E2.1.Micro). UNCHECK for custom shapes."
+    default: true
+
+  # ===================================================================
+  # PAYABLE ADB CONFIGURATION
+  # ===================================================================
+
+  adb_cpu_core_count:
+    type: number
+    title: "ADB CPU Cores"
+    description: "Number of CPU cores for Autonomous Database (1-128)"
+    default: 2
+    minimum: 1
+    maximum: 128
+
+  adb_data_storage_size_in_gb:
+    type: number
+    title: "ADB Storage (GB)"
+    description: "Database storage in GB (minimum 1024GB/1TB for payable tier, will be converted to TB)"
+    default: 1024
+    minimum: 1024
+    maximum: 393216
+
+  adb_auto_scaling_enabled:
+    type: boolean
+    title: "Enable Auto Scaling"
+    description: "Automatically scale CPU based on workload"
     default: false
 
+  adb_auto_scaling_max_cpu_core_count:
+    type: number
+    title: "Max CPU for Auto Scaling"
+    description: "Maximum CPU cores when auto-scaling is enabled"
+    default: 4
+    minimum: 1
+    maximum: 128
+
   # ===================================================================
-  # PAID TIER CONFIGURATION (Only visible when free tier is disabled)
+  # CUSTOM COMPUTE CONFIGURATION
   # ===================================================================
 
-  compute_shape:
+  instance_shape:
     type: enum
     title: "Compute Instance Shape"
     description: "Instance type for compute resources"
@@ -138,7 +180,7 @@ variables:
       - "VM.Standard.A1.Flex"
       - "VM.Standard3.Flex"
 
-  compute_ocpus:
+  instance_ocpus:
     type: number
     title: "Compute OCPUs"
     description: "Number of OCPUs for the compute instance"
@@ -146,7 +188,7 @@ variables:
     minimum: 1
     maximum: 64
 
-  compute_memory_gb:
+  instance_memory_gb:
     type: number
     title: "Compute Memory (GB)"
     description: "Amount of memory in GB"
@@ -154,43 +196,23 @@ variables:
     minimum: 1
     maximum: 1024
 
-  database_ocpus:
-    type: number
-    title: "Database OCPUs"
-    description: "Number of OCPUs for Autonomous Database"
-    default: 2
-    minimum: 1
-    maximum: 128
-
-  database_storage_tb:
-    type: number
-    title: "Database Storage (TB)"
-    description: "Storage size in terabytes"
-    default: 1
-    minimum: 1
-    maximum: 384
-
-  enable_auto_scaling:
-    type: boolean
-    title: "Enable Auto Scaling"
-    description: "Automatically scale database CPU based on workload"
-    default: false
-
   # ===================================================================
-  # ADVANCED OPTIONS
+  # OPTIONAL SETTINGS
   # ===================================================================
 
-  database_version:
-    type: enum
-    title: "Database Version"
-    description: "Oracle Database version"
-    default: "19c"
-    enum:
-      - "19c"
-      - "21c"
-      - "23ai"
+  resource_prefix:
+    type: string
+    title: "Resource Name Prefix"
+    description: "Prefix for all resource names (optional)"
+    default: "python-oracle"
+    pattern: "^[a-zA-Z][a-zA-Z0-9-]*$"
+    maxLength: 20
 
-  database_workload:
+  # ===================================================================
+  # BASIC DATABASE OPTIONS
+  # ===================================================================
+
+  adb_workload:
     type: enum
     title: "Database Workload Type"
     description: "Type of database workload"
@@ -200,7 +222,7 @@ variables:
       - "DW"
       - "AJD"
 
-  license_model:
+  adb_license_model:
     type: enum
     title: "License Model"
     description: "Database license model"
@@ -219,9 +241,9 @@ outputGroups:
 
   - title: "📊 Deployment Summary"
     outputs:
-      - deployment_tier
-      - resource_configuration
-      - estimated_monthly_cost
+      - deployment_configuration
+      - cost_estimation
+      - resource_summary
 
   - title: "🚀 Next Steps"
     outputs:
