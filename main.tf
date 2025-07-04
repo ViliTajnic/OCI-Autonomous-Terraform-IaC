@@ -221,61 +221,34 @@ resource "oci_database_autonomous_database" "adb" {
   cpu_core_count = local.actual_adb_cpu_cores
   
   # Storage configuration - Always Free uses GB, Payable uses TB
-  # OCPU compute model requires TB, ECPU compute model allows GB
   data_storage_size_in_gb = var.use_always_free_adb ? local.free_tier_adb_storage_gb : null
   data_storage_size_in_tbs = var.use_always_free_adb ? null : max(1, ceil(var.adb_data_storage_size_in_gb / 1024))
   
-  # Database configuration
+  # Basic database configuration with 23ai
   display_name   = "${var.resource_prefix}-adb"
-  db_version     = var.adb_version
+  db_version     = "23ai"  # Keep 23ai as requested
   db_workload    = var.adb_workload
   license_model  = var.adb_license_model
   
   # Free tier setting
   is_free_tier = var.use_always_free_adb
   
-  # Auto-scaling configuration (payable tier only)
+  # Basic auto-scaling (payable tier only)
   is_auto_scaling_enabled = local.adb_auto_scaling_enabled
   
-  # Storage auto-scaling (payable tier only)
-  is_auto_scaling_for_storage_enabled = var.use_always_free_adb ? false : var.adb_auto_scaling_for_storage_enabled
-  
-  # Character sets for proper internationalization
-  character_set  = "AL32UTF8"
-  ncharacter_set = "AL16UTF16"
-  
-  # Network configuration
-  subnet_id = oci_core_subnet.public_subnet.id
+  # Simple network configuration
   whitelisted_ips = ["0.0.0.0/0"]
-  are_primary_whitelisted_ips_used = true
-  
-  # Security settings
-  is_mtls_connection_required = true  # Enhanced security with mTLS
-  
-  # Backup configuration (payable tier only)
-  backup_retention_period_in_days = var.use_always_free_adb ? null : var.adb_backup_retention_period_in_days
-  
-  # Management features (payable tier only)
-  database_management_status = var.use_always_free_adb ? null : var.adb_database_management_status
-  operations_insights_status = var.use_always_free_adb ? null : var.adb_operations_insights_status
   
   # Additional configuration
   is_dedicated = false
-  
-  # Maintenance schedule (payable tier only)
-  autonomous_maintenance_schedule_type = var.use_always_free_adb ? null : var.adb_maintenance_schedule_type
 
   freeform_tags = {
     "Environment" = var.use_always_free_adb ? "Development" : "Production"
     "ADB_Tier"    = var.use_always_free_adb ? "Always-Free" : "Payable"
     "Compute_Tier" = var.use_always_free_compute ? "Always-Free" : "Custom"
     "Workload"    = var.adb_workload
-    "Version"     = var.adb_version
+    "Version"     = "23ai"
     "CreatedBy"   = "Terraform"
-    "CPU_Cores"   = tostring(local.actual_adb_cpu_cores)
-    "Storage_Size" = var.use_always_free_adb ? "20GB" : "${max(1, ceil(var.adb_data_storage_size_in_gb / 1024))}TB"
-    "Auto_Scaling" = var.use_always_free_adb ? "Not_Available" : (var.adb_auto_scaling_enabled ? "Enabled" : "Disabled")
-    "MTLS_Required" = "true"
     "Python_Driver" = "python-oracledb"
   }
   
