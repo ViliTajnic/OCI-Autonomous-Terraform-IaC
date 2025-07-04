@@ -1,250 +1,77 @@
-title: "Oracle Autonomous Database + Python Stack"
-description: "Deploy Oracle Autonomous Database 23ai with Python environment using modern python-oracledb driver. Choose between Always Free or Payable ADB with basic configuration."
-informationalText: "✅ Always Free ADB enabled by default ($0 cost). Switch to Payable ADB for custom CPU/storage. Uses Oracle 23ai and python-oracledb (modern successor to cx_Oracle)."
+title: "Oracle Autonomous Database with Python Instance"
+description: "Deploy Oracle Autonomous Database (Always Free) with a Python-ready compute instance for development and learning"
+informationalText: "This stack creates an Oracle Autonomous Database and a compute instance pre-configured with Python and Oracle connectivity tools. Perfect for learning and development!"
 schemaVersion: 1.1.0
-version: "3.1"
+version: "1.0.0"
 locale: "en"
 
-# Variable Groups for better UI organization
 variableGroups:
-  - title: "🔧 Required Configuration (Only 2 inputs needed!)"
-    visible: true
+  - title: "Required Configuration"
     variables:
+      - adb_admin_password
       - ssh_public_key
-      - db_admin_password
 
-  - title: "💾 Database Configuration"
-    visible: true
+  - title: "Optional Configuration"
     variables:
-      - use_always_free_adb
-      - db_name
+      - environment_tag
+      - project_name
 
-  - title: "🖥️ Compute Configuration"
-    visible: true
-    variables:
-      - use_always_free_compute
-
-  - title: "💰 Payable ADB Settings (Basic Configuration)"
-    visible:
-      not:
-        - ${use_always_free_adb}
-    variables:
-      - adb_cpu_core_count
-      - adb_data_storage_size_in_gb
-      - adb_auto_scaling_enabled
-      - adb_auto_scaling_max_cpu_core_count
-
-  - title: "🖥️ Custom Compute Settings"
-    visible:
-      not:
-        - ${use_always_free_compute}
-    variables:
-      - instance_shape
-      - instance_ocpus
-      - instance_memory_gb
-
-  - title: "📝 Optional Settings"
-    visible: true
-    variables:
-      - resource_prefix
-
-  - title: "🔧 Basic Database Options"
-    visible:
-      not:
-        - ${use_always_free_adb}
-    variables:
-      - adb_workload
-      - adb_license_model
-
-# Variable Definitions - CLEAN AND SIMPLE
 variables:
-  # ===================================================================
-  # HIDE AUTOMATIC VARIABLES FROM UI
-  # ===================================================================
-  
-  compartment_ocid:
-    type: string
-    visible: false
-    required: false
-
-  tenancy_ocid:
-    type: string
-    visible: false
-    required: false
-
-  region:
-    type: string
-    visible: false
-    required: false
-
-  config_file_profile:
-    type: string
-    visible: false
-    required: false
-
-  # Database version is hardcoded in variables.tf - completely removed from schema
-  # adb_version: REMOVED - not in schema at all
-
-  # ===================================================================
-  # REQUIRED CONFIGURATION
-  # ===================================================================
-
-  ssh_public_key:
-    type: oci:core:ssh:publickey
-    title: "SSH Public Key"
-    description: "Your SSH public key to access the compute instance"
-    required: true
-
-  db_admin_password:
+  # Required Variables
+  adb_admin_password:
     type: password
     title: "Database Admin Password"
-    description: "Password for the database ADMIN user (8+ characters, include uppercase, lowercase, number)"
+    description: "Password for the Autonomous Database admin user. Must be 8+ characters with uppercase, lowercase, number and special character (e.g., Demo123!)"
     required: true
-    minLength: 8
-    maxLength: 30
+    pattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^\\da-zA-Z]).{8,}$"
 
-  # ===================================================================
-  # DATABASE CONFIGURATION
-  # ===================================================================
+  ssh_public_key:
+    type: ociKey
+    title: "SSH Public Key"
+    description: "SSH public key for accessing the compute instance"
+    required: true
 
-  use_always_free_adb:
-    type: boolean
-    title: "✅ Use Always Free Autonomous Database"
-    description: "Keep CHECKED for free ADB (1 CPU, 20GB). UNCHECK for payable ADB with custom CPU/storage."
-    default: true
+  # Optional Variables
+  environment_tag:
+    type: enum
+    title: "Environment"
+    description: "Environment tag for resource organization"
+    default: "Demo"
+    enum:
+      - "Demo"
+      - "Development"
+      - "Testing"
+      - "Learning"
 
-  db_name:
+  project_name:
     type: string
-    title: "Database Name"
-    description: "Name for the Autonomous Database"
-    default: "PYTHONADB"
-    pattern: "^[A-Za-z][A-Za-z0-9]*$"
-    maxLength: 14
+    title: "Project Name"
+    description: "Project name for resource tagging"
+    default: "Python-ADB"
+    maxLength: 50
 
-  # ===================================================================
-  # COMPUTE CONFIGURATION
-  # ===================================================================
+outputs:
+  instance_public_ip:
+    title: "Instance Public IP"
+    description: "Public IP address of your compute instance"
+    type: link
 
-  use_always_free_compute:
-    type: boolean
-    title: "✅ Use Always Free Compute"
-    description: "Keep CHECKED for free compute (VM.Standard.E2.1.Micro). UNCHECK for custom shapes."
-    default: true
+  ssh_command:
+    title: "SSH Connection Command"
+    description: "Ready-to-use SSH command"
+    type: copyableString
 
-  # ===================================================================
-  # PAYABLE ADB CONFIGURATION
-  # ===================================================================
+  adb_service_console_url:
+    title: "Database Console"
+    description: "Autonomous Database service console"
+    type: link
 
-  adb_cpu_core_count:
-    type: number
-    title: "ADB CPU Cores"
-    description: "Number of CPU cores for Autonomous Database (1-128)"
-    default: 2
-    minimum: 1
-    maximum: 128
-
-  adb_data_storage_size_in_gb:
-    type: number
-    title: "ADB Storage (GB)"
-    description: "Database storage in GB (minimum 1024GB/1TB for payable tier, will be converted to TB)"
-    default: 1024
-    minimum: 1024
-    maximum: 393216
-
-  adb_auto_scaling_enabled:
-    type: boolean
-    title: "Enable Auto Scaling"
-    description: "Automatically scale CPU based on workload"
-    default: false
-
-  adb_auto_scaling_max_cpu_core_count:
-    type: number
-    title: "Max CPU for Auto Scaling"
-    description: "Maximum CPU cores when auto-scaling is enabled"
-    default: 4
-    minimum: 1
-    maximum: 128
-
-  # ===================================================================
-  # CUSTOM COMPUTE CONFIGURATION
-  # ===================================================================
-
-  instance_shape:
-    type: enum
-    title: "Compute Instance Shape"
-    description: "Instance type for compute resources"
-    default: "VM.Standard.E4.Flex"
-    enum:
-      - "VM.Standard.E3.Flex"
-      - "VM.Standard.E4.Flex"
-      - "VM.Standard.A1.Flex"
-      - "VM.Standard3.Flex"
-
-  instance_ocpus:
-    type: number
-    title: "Compute OCPUs"
-    description: "Number of OCPUs for the compute instance"
-    default: 2
-    minimum: 1
-    maximum: 64
-
-  instance_memory_gb:
-    type: number
-    title: "Compute Memory (GB)"
-    description: "Amount of memory in GB"
-    default: 16
-    minimum: 1
-    maximum: 1024
-
-  # ===================================================================
-  # OPTIONAL SETTINGS
-  # ===================================================================
-
-  resource_prefix:
+  next_steps:
+    title: "Next Steps"
+    description: "Instructions for using your deployed environment"
     type: string
-    title: "Resource Name Prefix"
-    description: "Prefix for all resource names (optional)"
-    default: "python-oracle"
-    pattern: "^[a-zA-Z][a-zA-Z0-9-]*$"
-    maxLength: 20
 
-  # ===================================================================
-  # BASIC DATABASE OPTIONS
-  # ===================================================================
-
-  adb_workload:
-    type: enum
-    title: "Database Workload Type"
-    description: "Type of database workload"
-    default: "OLTP"
-    enum:
-      - "OLTP"
-      - "DW"
-      - "AJD"
-
-  adb_license_model:
-    type: enum
-    title: "License Model"
-    description: "Database license model"
-    default: "LICENSE_INCLUDED"
-    enum:
-      - "LICENSE_INCLUDED"
-      - "BRING_YOUR_OWN_LICENSE"
-
-# Output Groups for organized results
-outputGroups:
-  - title: "🔗 Connection Information"
-    outputs:
-      - instance_public_ip
-      - ssh_connection_command
-      - database_connection_strings
-
-  - title: "📊 Deployment Summary"
-    outputs:
-      - deployment_configuration
-      - cost_estimation
-      - resource_summary
-
-  - title: "🚀 Next Steps"
-    outputs:
-      - setup_instructions
+  cost_info:
+    title: "Cost Information"
+    description: "Always Free tier usage"
+    type: string

@@ -1,254 +1,28 @@
-# ===================================================================
-# AUTOMATICALLY PROVIDED BY OCI RESOURCE MANAGER
-# ===================================================================
-
 variable "compartment_ocid" {
-  description = "Compartment OCID (automatically provided by OCI Resource Manager)"
-  type        = string
-  default     = ""
-}
-
-variable "tenancy_ocid" {
-  description = "Tenancy OCID (automatically provided by OCI Resource Manager)"
-  type        = string
-  default     = null
-}
-
-variable "region" {
-  description = "Region (automatically provided by OCI Resource Manager)"
-  type        = string
-  default     = null
-}
-
-variable "config_file_profile" {
-  description = "OCI config file profile for local development (ignored in OCI RM)"
-  type        = string
-  default     = "DEFAULT"
-}
-
-# ===================================================================
-# REQUIRED CONFIGURATION (Only 2 inputs needed!)
-# ===================================================================
-
-variable "ssh_public_key" {
-  description = "SSH public key for instance access"
+  description = "OCID of the compartment where resources will be created"
   type        = string
 }
 
-variable "db_admin_password" {
-  description = "Admin password for Autonomous Database (8+ characters, must include uppercase, lowercase, number)"
+variable "adb_admin_password" {
+  description = "Admin password for Autonomous Database (8+ characters, must include upper/lower case, number and special character)"
   type        = string
   sensitive   = true
-  validation {
-    condition     = length(var.db_admin_password) >= 8
-    error_message = "Database admin password must be at least 8 characters long."
-  }
 }
 
-# ===================================================================
-# DEPLOYMENT MODE (Free vs Payable ADB)
-# ===================================================================
-
-variable "use_always_free_adb" {
-  description = "Use Always Free Autonomous Database (true) or Payable ADB with custom resources (false)"
-  type        = bool
-  default     = true
-}
-
-# ===================================================================
-# BASIC SETTINGS (Optional customization)
-# ===================================================================
-
-variable "resource_prefix" {
-  description = "Prefix for all resource names"
+variable "ssh_public_key" {
+  description = "SSH public key for accessing the compute instance"
   type        = string
-  default     = "python-oracle"
 }
 
-variable "db_name" {
-  description = "Database name (alphanumeric only, max 14 chars)"
+# Optional variables with defaults
+variable "environment_tag" {
+  description = "Environment tag for resources"
   type        = string
-  default     = "PYTHONADB"
-  validation {
-    condition     = can(regex("^[A-Za-z][A-Za-z0-9]*$", var.db_name)) && length(var.db_name) <= 14
-    error_message = "Database name must start with a letter, contain only alphanumeric characters, and be max 14 characters."
-  }
+  default     = "Demo"
 }
 
-# ===================================================================
-# PAYABLE ADB CONFIGURATION
-# (Only used when use_always_free_adb = false)
-# ===================================================================
-
-variable "adb_cpu_core_count" {
-  description = "Number of CPU cores for Autonomous Database (payable tier only)"
-  type        = number
-  default     = 2
-  validation {
-    condition     = var.adb_cpu_core_count >= 1 && var.adb_cpu_core_count <= 128
-    error_message = "ADB CPU core count must be between 1 and 128."
-  }
-}
-
-variable "adb_data_storage_size_in_gb" {
-  description = "Database storage in GB for payable tier (will be converted to TB for OCPU model, minimum 1024GB)"
-  type        = number
-  default     = 1024
-  validation {
-    condition     = var.adb_data_storage_size_in_gb >= 1024 && var.adb_data_storage_size_in_gb <= 393216
-    error_message = "ADB storage must be between 1024GB (1TB) and 393,216GB (384TB) for payable tier."
-  }
-}
-
-variable "adb_auto_scaling_enabled" {
-  description = "Enable auto-scaling for ADB (payable tier only)"
-  type        = bool
-  default     = false
-}
-
-variable "adb_auto_scaling_max_cpu_core_count" {
-  description = "Maximum CPU cores for auto-scaling (payable tier only)"
-  type        = number
-  default     = 4
-  validation {
-    condition     = var.adb_auto_scaling_max_cpu_core_count >= 1 && var.adb_auto_scaling_max_cpu_core_count <= 128
-    error_message = "Auto-scaling max CPU cores must be between 1 and 128."
-  }
-}
-
-# ===================================================================
-# COMPUTE INSTANCE CONFIGURATION
-# ===================================================================
-
-variable "use_always_free_compute" {
-  description = "Use Always Free compute instance (true) or custom shape (false)"
-  type        = bool
-  default     = true
-}
-
-variable "instance_shape" {
-  description = "Instance shape for custom compute (when use_always_free_compute = false)"
+variable "project_name" {
+  description = "Project name for resource naming"
   type        = string
-  default     = "VM.Standard.E4.Flex"
-  validation {
-    condition = contains([
-      "VM.Standard.E3.Flex",
-      "VM.Standard.E4.Flex", 
-      "VM.Standard.A1.Flex",
-      "VM.Standard3.Flex"
-    ], var.instance_shape)
-    error_message = "Must be a valid Flex shape."
-  }
-}
-
-variable "instance_ocpus" {
-  description = "Number of OCPUs for custom compute instance"
-  type        = number
-  default     = 2
-  validation {
-    condition     = var.instance_ocpus >= 1 && var.instance_ocpus <= 64
-    error_message = "Instance OCPUs must be between 1 and 64."
-  }
-}
-
-variable "instance_memory_gb" {
-  description = "Memory in GB for custom compute instance"
-  type        = number
-  default     = 16
-  validation {
-    condition     = var.instance_memory_gb >= 1 && var.instance_memory_gb <= 1024
-    error_message = "Instance memory must be between 1 and 1024 GB."
-  }
-}
-
-# ===================================================================
-# ADVANCED DATABASE OPTIONS
-# ===================================================================
-
-variable "adb_version" {
-  description = "Oracle Database version (always 23ai for latest features)"
-  type        = string
-  default     = "23ai"
-  validation {
-    condition     = var.adb_version == "23ai"
-    error_message = "Database version must be 23ai for optimal performance and features."
-  }
-}
-
-variable "adb_workload" {
-  description = "Database workload type"
-  type        = string
-  default     = "OLTP"
-  validation {
-    condition     = contains(["OLTP", "DW", "AJD"], var.adb_workload)
-    error_message = "Workload must be OLTP (transactions), DW (data warehouse), or AJD (JSON)."
-  }
-}
-
-variable "adb_license_model" {
-  description = "Database license model"
-  type        = string
-  default     = "LICENSE_INCLUDED"
-  validation {
-    condition     = contains(["LICENSE_INCLUDED", "BRING_YOUR_OWN_LICENSE"], var.adb_license_model)
-    error_message = "License model must be LICENSE_INCLUDED or BRING_YOUR_OWN_LICENSE."
-  }
-}
-
-variable "adb_backup_retention_period_in_days" {
-  description = "Backup retention period in days (payable tier only)"
-  type        = number
-  default     = 7
-  validation {
-    condition     = var.adb_backup_retention_period_in_days >= 1 && var.adb_backup_retention_period_in_days <= 60
-    error_message = "Backup retention must be between 1 and 60 days."
-  }
-}
-
-# Add these new variables after the existing ones
-
-variable "adb_auto_scaling_for_storage_enabled" {
-  description = "Enable auto-scaling for storage (payable tier only)"
-  type        = bool
-  default     = true
-}
-
-variable "adb_database_management_status" {
-  description = "Database management status (payable tier only)"
-  type        = string
-  default     = "NOT_ENABLED"
-  validation {
-    condition     = contains(["ENABLED", "NOT_ENABLED"], var.adb_database_management_status)
-    error_message = "Database management status must be ENABLED or NOT_ENABLED."
-  }
-}
-
-variable "adb_operations_insights_status" {
-  description = "Operations insights status (payable tier only)"
-  type        = string
-  default     = "NOT_ENABLED"
-  validation {
-    condition     = contains(["ENABLED", "NOT_ENABLED"], var.adb_operations_insights_status)
-    error_message = "Operations insights status must be ENABLED or NOT_ENABLED."
-  }
-}
-
-variable "adb_maintenance_schedule_type" {
-  description = "Maintenance schedule type (payable tier only)"
-  type        = string
-  default     = "REGULAR"
-  validation {
-    condition     = contains(["EARLY", "REGULAR"], var.adb_maintenance_schedule_type)
-    error_message = "Maintenance schedule type must be EARLY or REGULAR."
-  }
-}
-
-# ===================================================================
-# NETWORK CONFIGURATION
-# ===================================================================
-
-variable "enable_web_access" {
-  description = "Enable HTTP (80) and HTTPS (443) ports for web applications"
-  type        = bool
-  default     = true
+  default     = "Python-ADB"
 }

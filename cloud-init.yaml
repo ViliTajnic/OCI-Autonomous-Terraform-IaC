@@ -1,7 +1,6 @@
 #cloud-config
-
 package_update: true
-package_upgrade: true
+package_upgrade: false
 
 packages:
   - python3
@@ -10,226 +9,175 @@ packages:
   - wget
   - curl
 
+write_files:
+  - content: |
+      #!/bin/bash
+      echo "Starting Oracle Client setup..."
+      
+      # Create directory for Oracle client
+      sudo mkdir -p /opt/oracle
+      cd /tmp
+      
+      # Download Oracle Instant Client
+      wget -q https://download.oracle.com/otn_software/linux/instantclient/1921000/oracle-instantclient19.21-basic-19.21.0.0.0-1.x86_64.rpm
+      wget -q https://download.oracle.com/otn_software/linux/instantclient/1921000/oracle-instantclient19.21-devel-19.21.0.0.0-1.x86_64.rpm
+      
+      # Install Oracle Instant Client
+      sudo rpm -Uvh oracle-instantclient19.21-basic-19.21.0.0.0-1.x86_64.rpm
+      sudo rpm -Uvh oracle-instantclient19.21-devel-19.21.0.0.0-1.x86_64.rpm
+      
+      # Install cx_Oracle for opc user
+      sudo -u opc pip3 install cx_Oracle --user
+      
+      # Set environment variables for opc user
+      echo 'export LD_LIBRARY_PATH=/usr/lib/oracle/19.21/client64/lib:$LD_LIBRARY_PATH' >> /home/opc/.bashrc
+      echo 'export PATH=/usr/lib/oracle/19.21/client64/bin:$PATH' >> /home/opc/.bashrc
+      
+      # Create test connection script
+      cat > /home/opc/test_connect.py << 'EOF'
+      #!/usr/bin/env python3
+      """
+      Oracle Database Connection Test Script
+      
+      This script tests the Oracle Instant Client installation and 
+      provides a template for connecting to your Autonomous Database.
+      """
+      
+      import sys
+      import os
+      
+      def test_cx_oracle():
+          """Test cx_Oracle installation"""
+          try:
+              import cx_Oracle
+              print("✅ cx_Oracle imported successfully")
+              print(f"   cx_Oracle version: {cx_Oracle.version}")
+              return True
+          except ImportError as e:
+              print(f"❌ Failed to import cx_Oracle: {e}")
+              return False
+      
+      def test_oracle_client():
+          """Test Oracle Instant Client initialization"""
+          try:
+              import cx_Oracle
+              cx_Oracle.init_oracle_client(lib_dir="/usr/lib/oracle/19.21/client64/lib")
+              print("✅ Oracle Instant Client initialized successfully")
+              return True
+          except Exception as e:
+              print(f"❌ Failed to initialize Oracle client: {e}")
+              return False
+      
+      def test_database_connection():
+          """Test database connection (requires wallet)"""
+          try:
+              import cx_Oracle
+              
+              # Check if wallet directory exists
+              wallet_dir = "/home/opc/wallet"
+              if not os.path.exists(wallet_dir):
+                  print("⚠️  Wallet directory not found. Please:")
+                  print("   1. Download wallet from OCI Console")
+                  print("   2. Upload wallet.zip to this instance")
+                  print("   3. Run: unzip wallet.zip -d wallet/")
+                  return False
+              
+              # Check for required wallet files
+              required_files = ["tnsnames.ora", "sqlnet.ora", "cwallet.sso"]
+              missing_files = [f for f in required_files if not os.path.exists(os.path.join(wallet_dir, f))]
+              
+              if missing_files:
+                  print(f"⚠️  Missing wallet files: {missing_files}")
+                  return False
+              
+              print("✅ Wallet files found")
+              print("📝 To test database connection, update this script with:")
+              print("   - Your admin password")
+              print("   - Uncomment the connection code below")
+              
+              # Example connection code (commented out)
+              print("\n# Example connection code:")
+              print("# connection = cx_Oracle.connect(")
+              print("#     'ADMIN',")
+              print("#     'your_admin_password',")
+              print("#     '${adb_service_name}',")
+              print("#     config_dir=wallet_dir")
+              print("# )")
+              print("# cursor = connection.cursor()")
+              print("# cursor.execute('SELECT \\'Hello Oracle!\\' FROM dual')")
+              print("# result = cursor.fetchone()")
+              print("# print(f'Database says: {result[0]}')")
+              print("# cursor.close()")
+              print("# connection.close()")
+              
+              return True
+              
+          except Exception as e:
+              print(f"❌ Database connection test failed: {e}")
+              return False
+      
+      def main():
+          """Main test function"""
+          print("Oracle Database Connection Test")
+          print("=" * 40)
+          
+          tests = [
+              ("cx_Oracle Installation", test_cx_oracle),
+              ("Oracle Client Initialization", test_oracle_client),
+              ("Database Connection Setup", test_database_connection)
+          ]
+          
+          results = []
+          for test_name, test_func in tests:
+              print(f"\n🔍 Testing {test_name}...")
+              result = test_func()
+              results.append((test_name, result))
+          
+          print("\n" + "=" * 40)
+          print("TEST SUMMARY")
+          print("=" * 40)
+          
+          for test_name, result in results:
+              status = "✅ PASS" if result else "❌ FAIL"
+              print(f"{status}: {test_name}")
+          
+          all_passed = all(result for _, result in results)
+          if all_passed:
+              print("\n🎉 All tests passed! Your environment is ready.")
+          else:
+              print("\n⚠️  Some tests failed. Check the output above.")
+      
+      if __name__ == "__main__":
+          main()
+      EOF
+      
+      # Make script executable
+      chmod +x /home/opc/test_connect.py
+      chown opc:opc /home/opc/test_connect.py
+      
+      # Create simple Oracle client test
+      cat > /home/opc/test_client.py << 'EOF'
+      #!/usr/bin/env python3
+      """Simple Oracle client test"""
+      
+      try:
+          import cx_Oracle
+          cx_Oracle.init_oracle_client(lib_dir="/usr/lib/oracle/19.21/client64/lib")
+          print("✅ Oracle client ready!")
+      except Exception as e:
+          print(f"❌ Oracle client error: {e}")
+      EOF
+      
+      chmod +x /home/opc/test_client.py
+      chown opc:opc /home/opc/test_client.py
+      
+      # Create setup completion marker
+      echo "Oracle client setup completed at $(date)" > /var/log/oracle-setup.log
+      echo "Setup completed successfully!"
+      
+    path: /tmp/setup_oracle.sh
+    permissions: '0755'
+
 runcmd:
-  # Install python-oracledb
-  - python3 -m pip install --upgrade pip
-  - python3 -m pip install oracledb flask pandas
-
-  # Create test connection script
-  - |
-    cat > /home/opc/test_connection.py << 'EOF'
-    #!/usr/bin/env python3
-    """
-    Test Oracle ADB connection using python-oracledb
-    """
-    import oracledb
-    import os
-
-    def test_connection():
-        wallet_dir = "/home/opc/wallet"
-        
-        if not os.path.exists(wallet_dir):
-            print("❌ Wallet directory not found!")
-            print("Please download wallet from OCI Console and run:")
-            print("  scp wallet.zip opc@<instance_ip>:")
-            print("  ssh opc@<instance_ip>")
-            print("  unzip wallet.zip -d wallet/")
-            return
-        
-        print("🔍 Testing python-oracledb connection...")
-        print(f"📦 python-oracledb version: {oracledb.__version__}")
-        
-        try:
-            # Update these with your credentials
-            connection = oracledb.connect(
-                user="ADMIN",
-                password="${admin_password}",  # From terraform
-                dsn="PYTHONDB_high",           # Update if different
-                config_dir=wallet_dir
-            )
-            
-            cursor = connection.cursor()
-            cursor.execute("SELECT 'Hello from Oracle ADB!' FROM dual")
-            result = cursor.fetchone()
-            
-            print("✅ Connection successful!")
-            print(f"📊 Result: {result[0]}")
-            
-            # Get database info
-            cursor.execute("SELECT banner FROM v$version WHERE rownum = 1")
-            version = cursor.fetchone()
-            print(f"🗄️  Database: {version[0]}")
-            
-            cursor.close()
-            connection.close()
-            
-        except Exception as e:
-            print(f"❌ Connection failed: {e}")
-            print("💡 Check your wallet files and credentials")
-
-    if __name__ == "__main__":
-        test_connection()
-    EOF
-
-  # Create Flask web app
-  - |
-    cat > /home/opc/flask_app.py << 'EOF'
-    #!/usr/bin/env python3
-    """
-    Simple Flask app with Oracle ADB
-    """
-    from flask import Flask, render_template_string
-    import oracledb
-
-    app = Flask(__name__)
-
-    # Database configuration
-    DB_CONFIG = {
-        'user': 'ADMIN',
-        'password': '${admin_password}',
-        'dsn': 'PYTHONDB_high',
-        'config_dir': '/home/opc/wallet'
-    }
-
-    HTML_TEMPLATE = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Python + Oracle ADB</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
-            .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .success { color: #28a745; font-weight: bold; }
-            .error { color: #dc3545; font-weight: bold; }
-            .info { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 15px 0; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🐍 Python + Oracle Autonomous Database</h1>
-            <div class="info">
-                <strong>Driver:</strong> python-oracledb {{ oracledb_version }}<br>
-                <strong>Status:</strong> {{ status }}<br>
-                <strong>Time:</strong> {{ timestamp }}
-            </div>
-            
-            {% if error %}
-                <div class="error">❌ {{ error }}</div>
-            {% else %}
-                <div class="success">✅ Database connection successful!</div>
-                <h3>Query Results:</h3>
-                <ul>
-                {% for item in data %}
-                    <li>{{ item }}</li>
-                {% endfor %}
-                </ul>
-            {% endif %}
-        </div>
-    </body>
-    </html>
-    '''
-
-    @app.route('/')
-    def index():
-        try:
-            connection = oracledb.connect(**DB_CONFIG)
-            cursor = connection.cursor()
-            
-            # Test queries
-            results = []
-            
-            cursor.execute("SELECT 'Hello from Oracle!' FROM dual")
-            results.append(f"Message: {cursor.fetchone()[0]}")
-            
-            cursor.execute("SELECT TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') FROM dual")
-            timestamp = cursor.fetchone()[0]
-            results.append(f"Database time: {timestamp}")
-            
-            cursor.execute("SELECT banner FROM v$version WHERE rownum = 1")
-            results.append(f"Version: {cursor.fetchone()[0]}")
-            
-            cursor.close()
-            connection.close()
-            
-            return render_template_string(
-                HTML_TEMPLATE,
-                status="Connected",
-                timestamp=timestamp,
-                oracledb_version=oracledb.__version__,
-                data=results,
-                error=None
-            )
-            
-        except Exception as e:
-            return render_template_string(
-                HTML_TEMPLATE,
-                status="Failed",
-                timestamp="N/A",
-                oracledb_version=oracledb.__version__,
-                data=[],
-                error=str(e)
-            )
-
-    if __name__ == '__main__':
-        print("🚀 Starting Flask app...")
-        print("🌐 Access at: http://<instance-ip>:5000")
-        app.run(host='0.0.0.0', port=5000, debug=True)
-    EOF
-
-  # Create simple connection example
-  - |
-    cat > /home/opc/connection_example.py << 'EOF'
-    #!/usr/bin/env python3
-    """
-    Simple Oracle ADB connection example
-    """
-    import oracledb
-
-    # Connection using python-oracledb (Thin mode - no Oracle Client needed)
-    try:
-        connection = oracledb.connect(
-            user="ADMIN",
-            password="${admin_password}",
-            dsn="PYTHONDB_high",
-            config_dir="/home/opc/wallet"
-        )
-        
-        print("✅ Connected to Oracle Autonomous Database!")
-        
-        # Execute a simple query
-        cursor = connection.cursor()
-        cursor.execute("SELECT 'python-oracledb works!' as message FROM dual")
-        result = cursor.fetchone()
-        print(f"📊 Query result: {result[0]}")
-        
-        # Clean up
-        cursor.close()
-        connection.close()
-        print("✅ Connection closed")
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        print("💡 Make sure wallet is uploaded and extracted to /home/opc/wallet/")
-    EOF
-
-  # Set permissions
-  - chown -R opc:opc /home/opc/
-  - chmod +x /home/opc/*.py
-
-  # Log completion
-  - echo "$(date): Python-oracledb setup complete" > /var/log/setup.log
-
-final_message: |
-  🎉 Setup complete!
-  
-  Python packages installed:
-  • python-oracledb (modern Oracle driver)
-  • flask (web framework)
-  • pandas (data analysis)
-  
-  Ready-to-use scripts:
-  • test_connection.py - Test DB connection
-  • flask_app.py - Web application
-  • connection_example.py - Basic example
-  
-  Next: Upload database wallet and test connection!
+  - /tmp/setup_oracle.sh > /var/log/cloud-init-setup.log 2>&1
+  - echo "Cloud-init setup completed" >> /var/log/cloud-init-setup.log
