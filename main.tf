@@ -9,17 +9,8 @@ terraform {
   }
 }
 
-# Provider configuration - handles both local development and OCI Resource Manager
-provider "oci" {
-  # For OCI Resource Manager - uses instance principal authentication
-  # For local development - uses config file or environment variables
-  tenancy_ocid     = var.tenancy_ocid
-  region           = var.region
-  
-  # Use config_file_profile for local development (when not in OCI RM)
-  # This will be ignored in OCI Resource Manager
-  config_file_profile = var.config_file_profile
-}
+# OCI Resource Manager automatically configures the provider
+# No explicit provider block needed for OCI RM deployment
 
 # Get current compartment from the execution context
 # OCI Resource Manager automatically provides compartment_ocid
