@@ -30,10 +30,8 @@ output "database_connection_urls" {
 output "database_version_info" {
   description = "Information about the selected database version"
   value = {
-    requested_version = "23ai (preferred)"
-    available_versions = data.oci_database_autonomous_db_versions.available_versions.autonomous_db_versions[*].version
-    selected_version = local.best_db_version
-    version_note = local.best_db_version == "23ai" ? "✅ Using latest Oracle 23ai" : "⚠️ 23ai not available, using ${local.best_db_version}"
+    selected_version = oci_database_autonomous_database.adb.db_version
+    version_note = "Database version automatically selected based on availability"
   }
 }
 

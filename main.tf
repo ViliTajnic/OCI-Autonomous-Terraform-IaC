@@ -19,20 +19,19 @@ provider "oci" {
   # when these variables are provided but no other auth method is specified
 }
 
-# Get current compartment from the execution context
-# OCI Resource Manager automatically provides compartment_ocid
-locals {
-  # Use the compartment where the stack is being executed
-  current_compartment_id = var.compartment_ocid
+# Get available database versions for the compartment
+data "oci_database_autonomous_db_versions" "available_versions" {
+  compartment_id = var.compartment_ocid
+  db_workload    = var.adb_workload
 }
 
 data "oci_identity_availability_domain" "ad" {
-  compartment_id = local.current_compartment_id
+  compartment_id = var.compartment_ocid
   ad_number      = 1
 }
 
 data "oci_core_images" "compute_images" {
-  compartment_id           = local.current_compartment_id
+  compartment_id           = var.compartment_ocid
   operating_system         = "Oracle Linux"
   operating_system_version = "8"
   shape                    = local.actual_instance_shape
@@ -40,17 +39,8 @@ data "oci_core_images" "compute_images" {
   sort_order               = "DESC"
 }
 
-# Get available database versions for the compartment
-data "oci_database_autonomous_db_versions" "available_versions" {
-  compartment_id = var.compartment_ocid
-  db_workload    = var.adb_workload
-}
-
-# Local values for conditional logic
+# Local values for conditional logic - SINGLE DEFINITION
 locals {
-  # Use the compartment where the stack is being executed
-  current_compartment_id = var.compartment_ocid
-  
   # Always Free tier configurations
   free_tier_compute_shape = "VM.Standard.E2.1.Micro"
   free_tier_adb_cpu_cores = 1
@@ -75,7 +65,7 @@ locals {
 
 # VCN
 resource "oci_core_vcn" "vcn" {
-  compartment_id = local.current_compartment_id
+  compartment_id = var.compartment_ocid
   display_name   = "${var.resource_prefix}-vcn"
   cidr_block     = "10.0.0.0/16"
   dns_label      = "pythonvcn"
@@ -89,14 +79,14 @@ resource "oci_core_vcn" "vcn" {
 
 # Internet Gateway
 resource "oci_core_internet_gateway" "ig" {
-  compartment_id = local.current_compartment_id
+  compartment_id = var.compartment_ocid
   vcn_id         = oci_core_vcn.vcn.id
   display_name   = "${var.resource_prefix}-ig"
 }
 
 # Route table
 resource "oci_core_route_table" "public_rt" {
-  compartment_id = local.current_compartment_id
+  compartment_id = var.compartment_ocid
   vcn_id         = oci_core_vcn.vcn.id
   display_name   = "${var.resource_prefix}-public-rt"
 
@@ -108,7 +98,7 @@ resource "oci_core_route_table" "public_rt" {
 
 # Security list
 resource "oci_core_security_list" "public_sl" {
-  compartment_id = local.current_compartment_id
+  compartment_id = var.compartment_ocid
   vcn_id         = oci_core_vcn.vcn.id
   display_name   = "${var.resource_prefix}-public-sl"
 
@@ -171,7 +161,7 @@ resource "oci_core_security_list" "public_sl" {
 
 # Public subnet
 resource "oci_core_subnet" "public_subnet" {
-  compartment_id             = local.current_compartment_id
+  compartment_id             = var.compartment_ocid
   vcn_id                     = oci_core_vcn.vcn.id
   display_name               = "${var.resource_prefix}-public-subnet"
   cidr_block                 = "10.0.1.0/24"
@@ -184,7 +174,7 @@ resource "oci_core_subnet" "public_subnet" {
 # Compute instance
 resource "oci_core_instance" "compute_instance" {
   availability_domain = data.oci_identity_availability_domain.ad.name
-  compartment_id      = local.current_compartment_id
+  compartment_id      = var.compartment_ocid
   display_name        = "${var.resource_prefix}-instance"
   shape               = local.actual_instance_shape
 
@@ -227,7 +217,7 @@ resource "oci_core_instance" "compute_instance" {
 # Autonomous Database
 resource "oci_database_autonomous_database" "adb" {
   # Required fields
-  compartment_id = local.current_compartment_id
+  compartment_id = var.compartment_ocid
   admin_password = var.db_admin_password
   db_name        = var.db_name
   
