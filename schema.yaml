@@ -98,12 +98,13 @@ variables:
     description: "Select compute shape family (Ampere shapes support flexible CPU/memory)"
     default: "ampere_a1"
     enum:
-      - value: "ampere_a1"
-        displayName: "Ampere A1 (ARM) - Best flexibility"
-      - value: "intel_micro" 
-        displayName: "Intel E2.1.Micro - Fixed 1 CPU, 1GB"
-      - value: "ampere_a2"
-        displayName: "Ampere A2 (ARM) - Regional availability"
+      - "ampere_a1"
+      - "intel_micro" 
+      - "ampere_a2"
+    enumNames:
+      - "Ampere A1 (ARM) - Best flexibility"
+      - "Intel E2.1.Micro - Fixed 1 CPU, 1GB"
+      - "Ampere A2 (ARM) - Regional availability"
 
   always_free_performance_tier:
     type: enum
@@ -111,12 +112,13 @@ variables:
     description: "Choose your performance tier (all options are free within 4 OCPU limit)"
     default: "balanced"
     enum:
-      - value: "minimal"
-        displayName: "Minimal (1 OCPU, 6GB) - Basic demos"
-      - value: "balanced"
-        displayName: "Balanced (2 OCPU, 12GB) - Recommended"  
-      - value: "maximum"
-        displayName: "Maximum (4 OCPU, 24GB) - Full Always Free"
+      - "minimal"
+      - "balanced"
+      - "maximum"
+    enumNames:
+      - "Minimal (1 OCPU, 6GB) - Basic demos"
+      - "Balanced (2 OCPU, 12GB) - Recommended"  
+      - "Maximum (4 OCPU, 24GB) - Full Always Free"
     visible:
       or:
         - eq:
