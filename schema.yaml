@@ -12,6 +12,7 @@ variableGroups:
       - ssh_public_key
 
   - title: "Database Configuration"
+    description: "Configure your Oracle Autonomous Database. Always Free tier provides 20GB storage and 1 OCPU forever!"
     variables:
       - use_free_tier
       - adb_cpu_core_count
@@ -19,6 +20,7 @@ variableGroups:
       - adb_auto_scaling_enabled
 
   - title: "Compute Performance (Always Free)"
+    description: "Configure your compute instance within Always Free tier limits (4 OCPU, 24GB RAM total). All options below are completely free!"
     variables:
       - preferred_shape
       - always_free_performance_tier
@@ -65,9 +67,22 @@ variables:
   # Database Configuration Variables
   use_free_tier:
     type: boolean
-    title: "Use Always Free Tier"
-    description: "Enable to use Always Free tier (if available), disable for paid tier"
-    default: false
+    title: "Use Always Free Database Tier"
+    description: |
+      🆓 **Always Free Tier Benefits:**
+      - 20GB autonomous database storage
+      - 1 OCPU compute
+      - Automatic backups and security updates
+      - **$0 cost forever!**
+      
+      💰 **Paid Tier Benefits:**
+      - Unlimited storage and compute
+      - Auto-scaling capabilities
+      - Advanced features like Data Guard
+      - Pay only for what you use
+      
+      💡 **Recommendation:** Use Always Free for demos and development, upgrade to paid for production workloads.
+    default: true
 
   adb_cpu_core_count:
     type: number
@@ -95,36 +110,63 @@ variables:
   preferred_shape:
     type: enum
     title: "Compute Shape Type"
-    description: "Select compute shape family (all options support Always Free tier within 4 OCPU limit)"
+    description: |
+      Choose your compute processor architecture:
+      
+      🔥 **ARM Shapes (Recommended for Always Free):**
+      - Better power efficiency and performance per core
+      - Up to 4 OCPU, 24GB RAM available for free
+      
+      ⚡ **x86 Shapes (Best compatibility):**
+      - Native support for all x86 software and Docker images
+      - No ARM translation needed
+      - Flexible configurations up to 4 OCPU, 24GB RAM
+      
+      💡 **Quick Recommendation:**
+      - **New to Oracle Cloud?** → Ampere A1 (best Always Free value)
+      - **Need x86 compatibility?** → Intel E4.Flex (latest generation)
+      - **Simple & reliable?** → Intel E2.1.Micro (fixed configuration)
     default: "ampere_a1"
     enum:
       - "ampere_a1"
-      - "ampere_a2"
-      - "intel_e3_flex"
       - "intel_e4_flex"
-      - "intel_micro"
+      - "intel_e3_flex"
+      - "ampere_a2"
       - "amd_e3_flex"
+      - "intel_micro"
     enumNames:
-      - "Ampere A1 (ARM) - Best Always Free option"
-      - "Ampere A2 (ARM) - Regional availability"
-      - "Intel E3.Flex (x86) - Flexible Intel"
-      - "Intel E4.Flex (x86) - Latest Intel generation"
-      - "Intel E2.1.Micro (x86) - Fixed 1 CPU, 1GB"
-      - "AMD E3.Flex (x86) - AMD processors"
+      - "🚀 Ampere A1 (ARM) - BEST Always Free performance"
+      - "⚡ Intel E4.Flex (x86) - Latest Intel, full x86 compatibility"
+      - "💼 Intel E3.Flex (x86) - Mature Intel, proven stability"
+      - "🔄 Ampere A2 (ARM) - Alternative ARM option"
+      - "🔥 AMD E3.Flex (x86) - AMD processors, good performance"
+      - "🎯 Intel E2.1.Micro (x86) - Simple, fixed 1 CPU/1GB"
 
   always_free_performance_tier:
     type: enum
-    title: "Always Free Performance Level"
-    description: "Choose your performance tier (all options are free within 4 OCPU limit)"
+    title: "Performance Configuration"
+    description: |
+      Select your compute performance level:
+      
+      📊 **Performance Comparison:**
+      - **Minimal**: 1 OCPU, 6GB RAM - Good for basic demos
+      - **Balanced**: 2 OCPU, 12GB RAM - 2x faster, recommended for most use cases
+      - **Maximum**: 4 OCPU, 24GB RAM - 4x faster, uses full Always Free allocation
+      
+      💰 **All options are completely FREE** within Oracle's Always Free tier!
+      
+      🎯 **Recommendation:** Start with "Balanced" for good performance, upgrade to "Maximum" if you need more power.
+      
+      ⚠️ **Note:** You can use up to 4 OCPU and 24GB RAM total across ALL instances in your tenancy.
     default: "balanced"
     enum:
       - "minimal"
       - "balanced"
       - "maximum"
     enumNames:
-      - "Minimal (1 OCPU, 6GB) - Basic demos"
-      - "Balanced (2 OCPU, 12GB) - Recommended"  
-      - "Maximum (4 OCPU, 24GB) - Full Always Free"
+      - "💡 Minimal (1 OCPU, 6GB) - Light demos, basic testing"
+      - "⚡ Balanced (2 OCPU, 12GB) - RECOMMENDED for most demos"  
+      - "🚀 Maximum (4 OCPU, 24GB) - Full Always Free power!"
     visible:
       not:
         eq:

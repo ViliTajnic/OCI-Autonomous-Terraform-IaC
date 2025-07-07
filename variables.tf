@@ -14,7 +14,6 @@ variable "ssh_public_key" {
   type        = string
 }
 
-# Optional variables with defaults
 variable "environment_tag" {
   description = "Environment tag for resources"
   type        = string
@@ -27,11 +26,10 @@ variable "project_name" {
   default     = "Python-ADB"
 }
 
-# ADB Configuration Toggle
 variable "use_free_tier" {
   description = "Use Always Free tier for Autonomous Database (set to false for paid tier)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "adb_cpu_core_count" {
@@ -52,19 +50,17 @@ variable "adb_auto_scaling_enabled" {
   default     = false
 }
 
-# Compute Shape Selection
 variable "preferred_shape" {
   description = "Preferred compute shape type"
   type        = string
   default     = "ampere_a1"
   
   validation {
-    condition     = contains(["ampere_a1", "ampere_a2", "intel_micro"], var.preferred_shape)
-    error_message = "Preferred shape must be one of: ampere_a1, ampere_a2, intel_micro."
+    condition     = contains(["ampere_a1", "ampere_a2", "intel_micro", "intel_e3_flex", "intel_e4_flex", "amd_e3_flex"], var.preferred_shape)
+    error_message = "Preferred shape must be one of: ampere_a1, ampere_a2, intel_micro, intel_e3_flex, intel_e4_flex, amd_e3_flex."
   }
 }
 
-# Always Free Compute Performance Options
 variable "always_free_performance_tier" {
   description = "Always Free compute performance level"
   type        = string
