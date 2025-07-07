@@ -11,12 +11,6 @@ data "oci_identity_availability_domains" "ads" {
   compartment_id = var.compartment_ocid
 }
 
-# Get ALL available shapes for dynamic selection
-data "oci_core_shapes" "available_shapes" {
-  compartment_id      = var.compartment_ocid
-  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
-}
-
 # Get latest Oracle Linux image
 data "oci_core_images" "oracle_linux" {
   compartment_id           = var.compartment_ocid
@@ -118,16 +112,14 @@ resource "oci_database_autonomous_database" "python_adb" {
   freeform_tags = local.common_tags
 }
 
-# Create Compute Instance with auto-detected shape
+# Create Compute Instance with selected shape
 resource "oci_core_instance" "python_instance" {
-  count = local.selected_shape != null ? 1 : 0
-
   compartment_id      = var.compartment_ocid
   availability_domain = local.selected_ad
   shape               = local.selected_shape
   display_name        = local.instance_name
 
-  # Dynamic shape configuration based on detected shape
+  # Dynamic shape configuration based on selected shape
   dynamic "shape_config" {
     for_each = local.shape_config != null ? [local.shape_config] : []
     content {
@@ -155,7 +147,7 @@ resource "oci_core_instance" "python_instance" {
   }
 
   freeform_tags = merge(local.common_tags, {
-    DetectedShape = local.selected_shape
+    SelectedShape = local.selected_shape
     ShapeType     = local.shape_type
   })
 

@@ -20,42 +20,28 @@ locals {
   adb_storage   = var.use_free_tier ? 1 : var.adb_storage_size_tbs
   adb_license   = "LICENSE_INCLUDED"
   
-  # SMART SHAPE DETECTION - Works for any region/user
+  # SIMPLE SHAPE SELECTION - Use variable to let user choose
+  # This avoids complex API queries that might fail
   
-  # Define Always Free eligible shapes in order of preference
-  always_free_shapes = [
-    "VM.Standard.A1.Flex",      # Ampere A1 (preferred - up to 4 OCPU, 24GB)
-    "VM.Standard.E2.1.Micro",   # Intel micro (1 OCPU, 1GB) 
-    "VM.Standard.A2.Flex"       # Ampere A2 (if available)
-  ]
+  # Default shape preferences by priority
+  shape_preference_map = {
+    "ampere_a1" = "VM.Standard.A1.Flex"
+    "ampere_a2" = "VM.Standard.A2.Flex"  
+    "intel_micro" = "VM.Standard.E2.1.Micro"
+  }
   
-  # Get available shapes from data source
-  available_shape_names = [for shape in data.oci_core_shapes.available_shapes.shapes : shape.shape]
+  # Use variable or default to A1.Flex
+  selected_shape = lookup(local.shape_preference_map, var.preferred_shape, "VM.Standard.A1.Flex")
   
-  # Find the first available Always Free shape
-  selected_shape = length([
-    for shape in local.always_free_shapes : shape 
-    if contains(local.available_shape_names, shape)
-  ]) > 0 ? [
-    for shape in local.always_free_shapes : shape 
-    if contains(local.available_shape_names, shape)
-  ][0] : null
-  
-  # Get details of selected shape
-  selected_shape_details = local.selected_shape != null ? [
-    for shape in data.oci_core_shapes.available_shapes.shapes : shape 
-    if shape.shape == local.selected_shape
-  ][0] : null
-  
-  # Determine shape type and configuration
-  shape_type = local.selected_shape != null ? (
+  # Shape type determination
+  shape_type = (
     length(regexall("A1|A2", local.selected_shape)) > 0 ? "Ampere" :
     length(regexall("E2.1.Micro", local.selected_shape)) > 0 ? "Micro" :
     "Standard"
-  ) : "None"
+  )
   
-  # Smart shape configuration based on detected shape
-  shape_config = local.selected_shape != null ? (
+  # Smart shape configuration based on selected shape
+  shape_config = (
     # Ampere A1.Flex - Always Free: 1-4 OCPU, up to 6GB per OCPU
     local.selected_shape == "VM.Standard.A1.Flex" ? {
       ocpus         = 1
@@ -71,9 +57,9 @@ locals {
     # Other flex shapes - conservative config
     length(regexall("Flex", local.selected_shape)) > 0 ? {
       ocpus         = 1
-      memory_in_gbs = 1
+      memory_in_gbs = 6
     } : null
-  ) : null
+  )
   
   # Determine best availability domain
   # For E2.1.Micro, try to use AD-3 if available (common restriction)

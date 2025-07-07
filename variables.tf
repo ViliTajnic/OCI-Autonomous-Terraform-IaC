@@ -51,3 +51,15 @@ variable "adb_auto_scaling_enabled" {
   type        = bool
   default     = false
 }
+
+# Compute Shape Selection
+variable "preferred_shape" {
+  description = "Preferred compute shape type"
+  type        = string
+  default     = "ampere_a1"
+  
+  validation {
+    condition     = contains(["ampere_a1", "ampere_a2", "intel_micro"], var.preferred_shape)
+    error_message = "Preferred shape must be one of: ampere_a1, ampere_a2, intel_micro."
+  }
+}
