@@ -20,6 +20,33 @@ locals {
   adb_storage   = var.use_free_tier ? 1 : var.adb_storage_size_tbs
   adb_license   = "LICENSE_INCLUDED"
   
+  # ALWAYS FREE COMPUTE PERFORMANCE TIERS
+  
+  # Define performance configurations for Always Free
+  always_free_configs = {
+    minimal = {
+      description = "Basic demo - 1 OCPU, 6GB RAM"
+      ocpus       = 1
+      memory_gb   = 6
+      use_case    = "Light demos, basic development"
+    }
+    balanced = {
+      description = "Good performance - 2 OCPU, 12GB RAM" 
+      ocpus       = 2
+      memory_gb   = 12
+      use_case    = "Most demos, Python development"
+    }
+    maximum = {
+      description = "Full Always Free - 4 OCPU, 24GB RAM"
+      ocpus       = 4
+      memory_gb   = 24
+      use_case    = "Heavy workloads, multiple users"
+    }
+  }
+  
+  # Get selected performance tier configuration
+  selected_performance = local.always_free_configs[var.always_free_performance_tier]
+  
   # SIMPLE SHAPE SELECTION - Use variable to let user choose
   # This avoids complex API queries that might fail
   
@@ -40,35 +67,38 @@ locals {
     "Standard"
   )
   
-  # Smart shape configuration based on selected shape
+  # Smart shape configuration based on selected shape and performance tier
   shape_config = (
-    # Ampere A1.Flex - Always Free: 1-4 OCPU, up to 6GB per OCPU
+    # Ampere A1.Flex - Use performance tier configuration
     local.selected_shape == "VM.Standard.A1.Flex" ? {
-      ocpus         = 1
-      memory_in_gbs = 6
+      ocpus         = local.selected_performance.ocpus
+      memory_in_gbs = local.selected_performance.memory_gb
     } :
-    # Ampere A2.Flex - Configuration varies by region
+    # Ampere A2.Flex - Use performance tier configuration  
     local.selected_shape == "VM.Standard.A2.Flex" ? {
-      ocpus         = 1
-      memory_in_gbs = 6
+      ocpus         = local.selected_performance.ocpus
+      memory_in_gbs = local.selected_performance.memory_gb
     } :
-    # E2.1.Micro - Fixed shape, no config needed
+    # E2.1.Micro - Fixed shape, limited to 1 OCPU, 1GB (ignore performance tier)
     local.selected_shape == "VM.Standard.E2.1.Micro" ? null :
-    # Other flex shapes - conservative config
+    # Other flex shapes - use balanced config
     length(regexall("Flex", local.selected_shape)) > 0 ? {
-      ocpus         = 1
-      memory_in_gbs = 6
+      ocpus         = 2
+      memory_in_gbs = 12
     } : null
   )
   
-  # Determine best availability domain
-  # For E2.1.Micro, try to use AD-3 if available (common restriction)
-  # For others, use first available AD
-  selected_ad = local.selected_shape == "VM.Standard.E2.1.Micro" ? (
-    length(data.oci_identity_availability_domains.ads.availability_domains) >= 3 ?
-    data.oci_identity_availability_domains.ads.availability_domains[2].name :
-    data.oci_identity_availability_domains.ads.availability_domains[0].name
-  ) : data.oci_identity_availability_domains.ads.availability_domains[0].name
+  # Determine best availability domain with fallback logic
+  # Try all ADs in order to find capacity
+  available_ads = data.oci_identity_availability_domains.ads.availability_domains
+  
+  # For E2.1.Micro, prefer AD-3 but fall back to others
+  # For Ampere shapes, try all ADs starting with AD-1
+  selected_ad_index = local.selected_shape == "VM.Standard.E2.1.Micro" ? (
+    length(local.available_ads) >= 3 ? 2 : 0  # Try AD-3 first, then AD-1
+  ) : 0  # For Ampere, start with AD-1
+  
+  selected_ad = local.available_ads[local.selected_ad_index].name
   
   # Instance naming
   instance_name = "${local.resource_prefix}-instance"

@@ -18,6 +18,11 @@ variableGroups:
       - adb_storage_size_tbs
       - adb_auto_scaling_enabled
 
+  - title: "Compute Performance (Always Free)"
+    variables:
+      - preferred_shape
+      - always_free_performance_tier
+
   - title: "Optional Configuration"
     variables:
       - environment_tag
@@ -86,14 +91,40 @@ variables:
       not:
         - use_free_tier
 
-  adb_auto_scaling_enabled:
-    type: boolean
-    title: "Enable Auto Scaling"
-    description: "Enable auto scaling for ADB (not available for free tier)"
-    default: false
-    visible: 
-      not:
-        - use_free_tier
+  # Compute Performance Variables
+  preferred_shape:
+    type: enum
+    title: "Compute Shape Type"
+    description: "Select compute shape family (Ampere shapes support flexible CPU/memory)"
+    default: "ampere_a1"
+    enum:
+      - value: "ampere_a1"
+        displayName: "Ampere A1 (ARM) - Best flexibility"
+      - value: "intel_micro" 
+        displayName: "Intel E2.1.Micro - Fixed 1 CPU, 1GB"
+      - value: "ampere_a2"
+        displayName: "Ampere A2 (ARM) - Regional availability"
+
+  always_free_performance_tier:
+    type: enum
+    title: "Always Free Performance Level"
+    description: "Choose your performance tier (all options are free within 4 OCPU limit)"
+    default: "balanced"
+    enum:
+      - value: "minimal"
+        displayName: "Minimal (1 OCPU, 6GB) - Basic demos"
+      - value: "balanced"
+        displayName: "Balanced (2 OCPU, 12GB) - Recommended"  
+      - value: "maximum"
+        displayName: "Maximum (4 OCPU, 24GB) - Full Always Free"
+    visible:
+      or:
+        - eq:
+          - preferred_shape
+          - "ampere_a1"
+        - eq:
+          - preferred_shape  
+          - "ampere_a2"
 
 outputs:
   instance_public_ip:

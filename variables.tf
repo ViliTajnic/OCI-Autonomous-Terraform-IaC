@@ -56,10 +56,22 @@ variable "adb_auto_scaling_enabled" {
 variable "preferred_shape" {
   description = "Preferred compute shape type"
   type        = string
-  default     = "intel_micro"  # Changed default to E2.1.Micro for better availability
+  default     = "ampere_a1"
   
   validation {
     condition     = contains(["ampere_a1", "ampere_a2", "intel_micro"], var.preferred_shape)
     error_message = "Preferred shape must be one of: ampere_a1, ampere_a2, intel_micro."
+  }
+}
+
+# Always Free Compute Performance Options
+variable "always_free_performance_tier" {
+  description = "Always Free compute performance level"
+  type        = string
+  default     = "balanced"
+  
+  validation {
+    condition     = contains(["minimal", "balanced", "maximum"], var.always_free_performance_tier)
+    error_message = "Performance tier must be one of: minimal, balanced, maximum."
   }
 }

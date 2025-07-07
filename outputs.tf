@@ -1,12 +1,14 @@
 # Shape selection information
 output "selected_shape_info" {
-  description = "Information about selected compute shape"
+  description = "Information about selected compute shape and performance"
   value = {
-    selected_shape    = local.selected_shape
-    shape_type        = local.shape_type
-    shape_config      = local.shape_config
+    selected_shape       = local.selected_shape
+    shape_type          = local.shape_type
+    performance_tier    = var.always_free_performance_tier
+    performance_config  = local.selected_performance
+    shape_config        = local.shape_config
     availability_domain = local.selected_ad
-    preference        = var.preferred_shape
+    cost               = "Always Free (within 4 OCPU limit)"
   }
 }
 
@@ -89,10 +91,27 @@ output "next_steps" {
   ]
 }
 
-# Cost information
+# Cost and performance information
 output "cost_info" {
   description = "Cost information"
-  value = var.use_free_tier ? "This stack uses Always Free tier resources - Total cost: $0/month" : "This stack uses PAID tier resources - Check OCI billing for costs"
+  value = var.use_free_tier ? "Database: Always Free tier - Compute: ${local.selected_performance.description} - Total cost: $0/month" : "This stack uses PAID tier resources - Check OCI billing for costs"
+}
+
+# Performance tier info
+output "performance_info" {
+  description = "Compute performance details"
+  value = {
+    tier_selected     = var.always_free_performance_tier
+    description       = local.selected_performance.description
+    cpu_cores         = local.selected_performance.ocpus
+    memory_gb         = local.selected_performance.memory_gb
+    use_case          = local.selected_performance.use_case
+    still_free        = "Yes - within Always Free 4 OCPU limit"
+    upgrade_options   = {
+      "To paid tier"    = "Set use_free_tier = false for unlimited resources"
+      "Higher performance" = "Choose 'maximum' tier for 4 OCPU, 24GB (still free)"
+    }
+  }
 }
 
 # Database tier info
