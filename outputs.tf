@@ -1,12 +1,24 @@
-# Instance connection information
+# Shape detection information
+output "detected_shape_info" {
+  description = "Information about automatically detected shape"
+  value = {
+    selected_shape    = local.selected_shape
+    shape_type        = local.shape_type
+    shape_config      = local.shape_config
+    availability_domain = local.selected_ad
+    available_shapes  = local.available_shape_names
+  }
+}
+
+# Instance connection information (conditional)
 output "instance_public_ip" {
   description = "Public IP address of the compute instance"
-  value       = oci_core_instance.python_instance.public_ip
+  value       = length(oci_core_instance.python_instance) > 0 ? oci_core_instance.python_instance[0].public_ip : "No instance created - no suitable shape found"
 }
 
 output "ssh_command" {
   description = "SSH command to connect to the instance"
-  value       = "ssh opc@${oci_core_instance.python_instance.public_ip}"
+  value       = length(oci_core_instance.python_instance) > 0 ? "ssh opc@${oci_core_instance.python_instance[0].public_ip}" : "No instance created - check detected_shape_info output"
 }
 
 # Database information
@@ -46,7 +58,7 @@ output "subnet_id" {
   value       = oci_core_subnet.python_subnet.id
 }
 
-# Resource IDs - THIS FIXES YOUR ERROR
+# Resource IDs
 output "resource_ids" {
   description = "OCIDs of all created resources"
   value = {
@@ -54,30 +66,39 @@ output "resource_ids" {
     vcn_id         = oci_core_vcn.python_vcn.id
     subnet_id      = oci_core_subnet.python_subnet.id
     adb_id         = oci_database_autonomous_database.python_adb.id
-    instance_id    = oci_core_instance.python_instance.id
+    instance_id    = length(oci_core_instance.python_instance) > 0 ? oci_core_instance.python_instance[0].id : "No instance created"
   }
 }
 
-# Demo guidance
+# Demo guidance (conditional)
 output "next_steps" {
   description = "What to do after deployment"
-  value = [
-    "1. SSH to instance: ssh opc@${oci_core_instance.python_instance.public_ip}",
+  value = length(oci_core_instance.python_instance) > 0 ? [
+    "1. SSH to instance: ssh opc@${oci_core_instance.python_instance[0].public_ip}",
     "2. Go to OCI Console → Oracle Database → Autonomous Database",
-    "3. Click 'PythonADB' → DB Connection",
+    "3. Click '${local.adb_display_name}' → DB Connection",
     "4. Download Wallet → Set password → Save as wallet.zip",
-    "5. Upload wallet: scp wallet.zip opc@${oci_core_instance.python_instance.public_ip}:",
+    "5. Upload wallet: scp wallet.zip opc@${oci_core_instance.python_instance[0].public_ip}:",
     "6. Extract wallet: unzip wallet.zip -d wallet/",
     "7. Test connection: python3 test_connect.py"
+  ] : [
+    "❌ No compute instance was created",
+    "🔍 Check 'detected_shape_info' output to see available shapes",
+    "📝 No Always Free compute shapes found in your region/AD",
+    "💡 You can still use the Autonomous Database directly:",
+    "1. Go to OCI Console → Oracle Database → Autonomous Database",
+    "2. Click '${local.adb_display_name}' → DB Connection", 
+    "3. Download Wallet and use locally with Python"
   ]
 }
 
+# Cost information
 output "cost_info" {
   description = "Cost information"
   value = var.use_free_tier ? "This stack uses Always Free tier resources - Total cost: $0/month" : "This stack uses PAID tier resources - Check OCI billing for costs"
 }
 
-# Tier information
+# Database tier info
 output "database_tier_info" {
   description = "Database tier information"
   value = {
