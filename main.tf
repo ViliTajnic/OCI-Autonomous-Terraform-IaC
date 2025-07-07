@@ -169,7 +169,6 @@ resource "oci_core_instance" "python_instance" {
   freeform_tags = merge(local.common_tags, {
     SelectedShape = local.selected_shape
     ShapeType     = local.shape_type
-    ImageId       = data.oci_core_images.oracle_linux.images[0].id
   })
 
   # Prevent recreation on minor image changes

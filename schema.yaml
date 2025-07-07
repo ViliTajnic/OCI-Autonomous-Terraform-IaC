@@ -129,18 +129,18 @@ variables:
     default: "ampere_a1"
     enum:
       - "ampere_a1"
-      - "intel_e4_flex"
       - "intel_e3_flex"
+      - "intel_micro"
       - "ampere_a2"
       - "amd_e3_flex"
-      - "intel_micro"
+      - "intel_e4_flex"
     enumNames:
-      - "🚀 Ampere A1 (ARM) - BEST Always Free performance"
-      - "⚡ Intel E4.Flex (x86) - Latest Intel, full x86 compatibility"
-      - "💼 Intel E3.Flex (x86) - Mature Intel, proven stability"
+      - "🚀 Ampere A1 (ARM) - BEST Always Free performance & availability"
+      - "⚡ Intel E3.Flex (x86) - RECOMMENDED x86 option, good availability"
+      - "🎯 Intel E2.1.Micro (x86) - Simple, EXCELLENT availability"
       - "🔄 Ampere A2 (ARM) - Alternative ARM option"
-      - "🔥 AMD E3.Flex (x86) - AMD processors, good performance"
-      - "🎯 Intel E2.1.Micro (x86) - Simple, fixed 1 CPU/1GB"
+      - "🔥 AMD E3.Flex (x86) - AMD processors via E3.Flex"
+      - "⚠️ Intel E4.Flex (x86) - Latest Intel, LIMITED availability"
 
   always_free_performance_tier:
     type: enum
