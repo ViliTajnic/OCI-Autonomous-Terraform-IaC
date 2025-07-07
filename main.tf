@@ -11,7 +11,7 @@ data "oci_identity_availability_domains" "ads" {
   compartment_id = var.compartment_ocid
 }
 
-# Get latest Oracle Linux image with more flexible filtering
+# Get latest Oracle Linux image (simplified - no shape filter)
 data "oci_core_images" "oracle_linux" {
   compartment_id           = var.compartment_ocid
   operating_system         = "Oracle Linux"
@@ -19,31 +19,6 @@ data "oci_core_images" "oracle_linux" {
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
   state                    = "AVAILABLE"
-}
-
-# Debug output for images
-output "debug_available_images" {
-  description = "Debug: Available Oracle Linux images"
-  value = {
-    image_count = length(data.oci_core_images.oracle_linux.images)
-    first_image = length(data.oci_core_images.oracle_linux.images) > 0 ? {
-      id           = data.oci_core_images.oracle_linux.images[0].id
-      display_name = data.oci_core_images.oracle_linux.images[0].display_name
-      state        = data.oci_core_images.oracle_linux.images[0].state
-    } : "No images found"
-  }
-}
-
-# Debug output for availability domains
-output "debug_availability_domains" {
-  description = "Debug: Available ADs"
-  value = {
-    ad_count = length(data.oci_identity_availability_domains.ads.availability_domains)
-    ads = [for ad in data.oci_identity_availability_domains.ads.availability_domains : {
-      name = ad.name
-      id   = ad.id
-    }]
-  }
 }
 
 # Create VCN
@@ -137,11 +112,8 @@ resource "oci_database_autonomous_database" "python_adb" {
   freeform_tags = local.common_tags
 }
 
-# Create Compute Instance with better error handling
+# Create Compute Instance (simplified)
 resource "oci_core_instance" "python_instance" {
-  # Only create if we have images available
-  count = length(data.oci_core_images.oracle_linux.images) > 0 ? 1 : 0
-  
   compartment_id      = var.compartment_ocid
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
   shape               = local.instance_shape
@@ -182,39 +154,4 @@ resource "oci_core_instance" "python_instance" {
       source_details[0].source_id
     ]
   }
-}
-
-# Alternative instance with different shape if first fails
-resource "oci_core_instance" "python_instance_alt" {
-  # Only create if main instance failed and we have images
-  count = length(data.oci_core_images.oracle_linux.images) > 0 && length(oci_core_instance.python_instance) == 0 ? 1 : 0
-  
-  compartment_id      = var.compartment_ocid
-  availability_domain = length(data.oci_identity_availability_domains.ads.availability_domains) > 1 ? data.oci_identity_availability_domains.ads.availability_domains[1].name : data.oci_identity_availability_domains.ads.availability_domains[0].name
-  shape               = "VM.Standard.A1.Flex"  # ARM-based, often more available
-  display_name        = "${local.instance_name}-alt"
-
-  shape_config {
-    ocpus         = 1
-    memory_in_gbs = 6
-  }
-
-  create_vnic_details {
-    subnet_id        = oci_core_subnet.python_subnet.id
-    assign_public_ip = true
-    hostname_label   = "pythonhostalt"
-  }
-
-  source_details {
-    source_id   = data.oci_core_images.oracle_linux.images[0].id
-    source_type = "image"
-  }
-
-  metadata = {
-    ssh_authorized_keys = var.ssh_public_key
-  }
-
-  freeform_tags = merge(local.common_tags, {
-    Shape = "Alternative-ARM"
-  })
 }
