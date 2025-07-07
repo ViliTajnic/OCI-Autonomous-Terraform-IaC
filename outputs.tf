@@ -13,12 +13,12 @@ output "selected_shape_info" {
 # Instance connection information
 output "instance_public_ip" {
   description = "Public IP address of the compute instance"
-  value       = oci_core_instance.python_instance.public_ip
+  value       = length(oci_core_instance.python_instance) > 0 ? oci_core_instance.python_instance[0].public_ip : "No instance created - check debug_image_info"
 }
 
 output "ssh_command" {
   description = "SSH command to connect to the instance"
-  value       = "ssh opc@${oci_core_instance.python_instance.public_ip}"
+  value       = length(oci_core_instance.python_instance) > 0 ? "ssh opc@${oci_core_instance.python_instance[0].public_ip}" : "No instance created - check debug_image_info"
 }
 
 # Database information
@@ -66,21 +66,26 @@ output "resource_ids" {
     vcn_id         = oci_core_vcn.python_vcn.id
     subnet_id      = oci_core_subnet.python_subnet.id
     adb_id         = oci_database_autonomous_database.python_adb.id
-    instance_id    = oci_core_instance.python_instance.id
+    instance_id    = length(oci_core_instance.python_instance) > 0 ? oci_core_instance.python_instance[0].id : "No instance created"
   }
 }
 
 # Demo guidance
 output "next_steps" {
   description = "What to do after deployment"
-  value = [
-    "1. SSH to instance: ssh opc@${oci_core_instance.python_instance.public_ip}",
+  value = length(oci_core_instance.python_instance) > 0 ? [
+    "1. SSH to instance: ssh opc@${oci_core_instance.python_instance[0].public_ip}",
     "2. Go to OCI Console → Oracle Database → Autonomous Database",
     "3. Click '${local.adb_display_name}' → DB Connection",
     "4. Download Wallet → Set password → Save as wallet.zip",
-    "5. Upload wallet: scp wallet.zip opc@${oci_core_instance.python_instance.public_ip}:",
+    "5. Upload wallet: scp wallet.zip opc@${oci_core_instance.python_instance[0].public_ip}:",
     "6. Extract wallet: unzip wallet.zip -d wallet/",
     "7. Test connection: python3 test_connect.py"
+  ] : [
+    "❌ No compute instance created",
+    "🔍 Check 'debug_image_info' output for details",
+    "💡 Try different shape or region",
+    "📝 Database is available - download wallet manually"
   ]
 }
 

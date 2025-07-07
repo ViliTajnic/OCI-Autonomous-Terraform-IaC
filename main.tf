@@ -11,11 +11,12 @@ data "oci_identity_availability_domains" "ads" {
   compartment_id = var.compartment_ocid
 }
 
-# Get latest Oracle Linux image
+# Get latest Oracle Linux image compatible with selected shape
 data "oci_core_images" "oracle_linux" {
   compartment_id           = var.compartment_ocid
   operating_system         = "Oracle Linux"
   operating_system_version = "8"
+  shape                    = local.selected_shape  # Filter by shape for compatibility
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
   state                    = "AVAILABLE"
@@ -112,8 +113,27 @@ resource "oci_database_autonomous_database" "python_adb" {
   freeform_tags = local.common_tags
 }
 
-# Create Compute Instance with selected shape
+# Debug output to show image compatibility
+output "debug_image_info" {
+  description = "Debug: Image and shape compatibility"
+  value = {
+    selected_shape = local.selected_shape
+    image_count    = length(data.oci_core_images.oracle_linux.images)
+    image_details  = length(data.oci_core_images.oracle_linux.images) > 0 ? {
+      id           = data.oci_core_images.oracle_linux.images[0].id
+      display_name = data.oci_core_images.oracle_linux.images[0].display_name
+      state        = data.oci_core_images.oracle_linux.images[0].state
+    } : {
+      error = "No compatible images found for selected shape"
+    }
+  }
+}
+
+# Create Compute Instance with shape-compatible image
 resource "oci_core_instance" "python_instance" {
+  # Only create if compatible images are found
+  count = length(data.oci_core_images.oracle_linux.images) > 0 ? 1 : 0
+
   compartment_id      = var.compartment_ocid
   availability_domain = local.selected_ad
   shape               = local.selected_shape
@@ -149,6 +169,7 @@ resource "oci_core_instance" "python_instance" {
   freeform_tags = merge(local.common_tags, {
     SelectedShape = local.selected_shape
     ShapeType     = local.shape_type
+    ImageId       = data.oci_core_images.oracle_linux.images[0].id
   })
 
   # Prevent recreation on minor image changes
