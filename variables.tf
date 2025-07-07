@@ -56,7 +56,7 @@ variable "adb_auto_scaling_enabled" {
 variable "preferred_shape" {
   description = "Preferred compute shape type"
   type        = string
-  default     = "ampere_a1"
+  default     = "intel_micro"  # Changed default to E2.1.Micro for better availability
   
   validation {
     condition     = contains(["ampere_a1", "ampere_a2", "intel_micro"], var.preferred_shape)
