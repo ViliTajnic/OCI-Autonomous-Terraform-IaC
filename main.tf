@@ -11,7 +11,13 @@ data "oci_identity_availability_domains" "ads" {
   compartment_id = var.compartment_ocid
 }
 
-# Get latest Oracle Linux image (no shape filter)
+# Get ALL available shapes for dynamic selection
+data "oci_core_shapes" "available_shapes" {
+  compartment_id      = var.compartment_ocid
+  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
+}
+
+# Get latest Oracle Linux image
 data "oci_core_images" "oracle_linux" {
   compartment_id           = var.compartment_ocid
   operating_system         = "Oracle Linux"
@@ -112,14 +118,23 @@ resource "oci_database_autonomous_database" "python_adb" {
   freeform_tags = local.common_tags
 }
 
-# Create Compute Instance (VM.Standard.A2.Flex with default config)
+# Create Compute Instance with auto-detected shape
 resource "oci_core_instance" "python_instance" {
+  count = local.selected_shape != null ? 1 : 0
+
   compartment_id      = var.compartment_ocid
-  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
-  shape               = local.instance_shape
+  availability_domain = local.selected_ad
+  shape               = local.selected_shape
   display_name        = local.instance_name
 
-  # No shape_config block - let OCI use defaults for VM.Standard.A2.Flex
+  # Dynamic shape configuration based on detected shape
+  dynamic "shape_config" {
+    for_each = local.shape_config != null ? [local.shape_config] : []
+    content {
+      ocpus         = shape_config.value.ocpus
+      memory_in_gbs = shape_config.value.memory_in_gbs
+    }
+  }
 
   create_vnic_details {
     subnet_id        = oci_core_subnet.python_subnet.id
@@ -139,7 +154,10 @@ resource "oci_core_instance" "python_instance" {
     }))
   }
 
-  freeform_tags = local.common_tags
+  freeform_tags = merge(local.common_tags, {
+    DetectedShape = local.selected_shape
+    ShapeType     = local.shape_type
+  })
 
   # Prevent recreation on minor image changes
   lifecycle {
