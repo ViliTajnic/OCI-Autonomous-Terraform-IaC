@@ -21,7 +21,7 @@ locals {
   adb_license   = var.use_free_tier ? "LICENSE_INCLUDED" : "LICENSE_INCLUDED"
   
   # Compute configuration (Ampere ARM-based)
-  instance_shape = "VM.Standard.A2.Flex"  # Ampere ARM processor
+  instance_shape = "VM.Standard.A2.Flex"  # Ampere ARM processor (only available shape)
   instance_name  = "${local.resource_prefix}-instance"
   
   # Common tags for all resources

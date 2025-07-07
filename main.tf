@@ -124,7 +124,7 @@ resource "oci_core_instance" "python_instance" {
     for_each = length(regexall("Flex", local.instance_shape)) > 0 ? [1] : []
     content {
       ocpus         = 1
-      memory_in_gbs = length(regexall("A1|A2", local.instance_shape)) > 0 ? 6 : 6  # Ampere shapes: 1 OCPU = 6GB RAM
+      memory_in_gbs = 6  # VM.Standard.A2.Flex: 1 OCPU = 6GB (as shown in OCI Console)
     }
   }
 
