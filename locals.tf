@@ -20,8 +20,8 @@ locals {
   adb_storage   = var.use_free_tier ? 1 : var.adb_storage_size_tbs
   adb_license   = var.use_free_tier ? "LICENSE_INCLUDED" : "LICENSE_INCLUDED"
   
-  # Compute configuration
-  instance_shape = "VM.Standard.E2.1.Micro"
+  # Compute configuration (Ampere ARM-based)
+  instance_shape = "VM.Standard.A2.Flex"  # Ampere ARM processor
   instance_name  = "${local.resource_prefix}-instance"
   
   # Common tags for all resources
