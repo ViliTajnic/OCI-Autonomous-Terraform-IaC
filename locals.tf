@@ -11,9 +11,14 @@ locals {
   vcn_name    = "${local.resource_prefix}-vcn"
   subnet_name = "${local.resource_prefix}-subnet"
   
-  # Database configuration
+  # Database configuration with tier logic
   adb_db_name      = "PYTHONADB"
-  adb_display_name = "PythonADB"
+  adb_display_name = var.use_free_tier ? "PythonADB-Free" : "PythonADB-Paid"
+  
+  # ADB configuration based on tier
+  adb_cpu_cores = var.use_free_tier ? 1 : var.adb_cpu_core_count
+  adb_storage   = var.use_free_tier ? 1 : var.adb_storage_size_tbs
+  adb_license   = var.use_free_tier ? "LICENSE_INCLUDED" : "LICENSE_INCLUDED"
   
   # Compute configuration
   instance_shape = "VM.Standard.E2.1.Micro"
@@ -25,5 +30,6 @@ locals {
     Project     = var.project_name
     CreatedBy   = "Terraform-ORM"
     Purpose     = "Demo"
+    Tier        = var.use_free_tier ? "Free" : "Paid"
   }
 }

@@ -11,6 +11,13 @@ variableGroups:
       - adb_admin_password
       - ssh_public_key
 
+  - title: "Database Configuration"
+    variables:
+      - use_free_tier
+      - adb_cpu_core_count
+      - adb_storage_size_tbs
+      - adb_auto_scaling_enabled
+
   - title: "Optional Configuration"
     variables:
       - environment_tag
@@ -49,6 +56,44 @@ variables:
     description: "Project name for resource tagging"
     default: "Python-ADB"
     maxLength: 50
+
+  # Database Configuration Variables
+  use_free_tier:
+    type: boolean
+    title: "Use Always Free Tier"
+    description: "Enable to use Always Free tier (if available), disable for paid tier"
+    default: false
+
+  adb_cpu_core_count:
+    type: number
+    title: "CPU Core Count"
+    description: "Number of CPU cores for ADB (ignored if using free tier)"
+    default: 1
+    minimum: 1
+    maximum: 128
+    visible: 
+      not:
+        - use_free_tier
+
+  adb_storage_size_tbs:
+    type: number
+    title: "Storage Size (TB)"
+    description: "Storage size in terabytes for ADB (ignored if using free tier)"
+    default: 1
+    minimum: 1
+    maximum: 384
+    visible: 
+      not:
+        - use_free_tier
+
+  adb_auto_scaling_enabled:
+    type: boolean
+    title: "Enable Auto Scaling"
+    description: "Enable auto scaling for ADB (not available for free tier)"
+    default: false
+    visible: 
+      not:
+        - use_free_tier
 
 outputs:
   instance_public_ip:

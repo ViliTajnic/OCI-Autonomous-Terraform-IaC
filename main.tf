@@ -96,18 +96,18 @@ resource "oci_core_subnet" "python_subnet" {
   freeform_tags = local.common_tags
 }
 
-# Create Autonomous Database (Always Free)
+# Create Autonomous Database (Free or Paid tier)
 resource "oci_database_autonomous_database" "python_adb" {
   compartment_id           = var.compartment_ocid
-  cpu_core_count           = 1
-  data_storage_size_in_tbs = 1
+  cpu_core_count           = local.adb_cpu_cores
+  data_storage_size_in_tbs = local.adb_storage
   db_name                  = local.adb_db_name
   admin_password           = var.adb_admin_password
   db_workload              = "OLTP"
   display_name             = local.adb_display_name
-  is_free_tier             = true
-  is_auto_scaling_enabled  = false
-  license_model            = "LICENSE_INCLUDED"
+  is_free_tier             = var.use_free_tier
+  is_auto_scaling_enabled  = var.use_free_tier ? false : var.adb_auto_scaling_enabled
+  license_model            = local.adb_license
 
   freeform_tags = local.common_tags
 }
@@ -118,6 +118,15 @@ resource "oci_core_instance" "python_instance" {
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
   shape               = local.instance_shape
   display_name        = local.instance_name
+
+  # Instance shape configuration for flexible shapes
+  dynamic "shape_config" {
+    for_each = length(regexall("Flex", local.instance_shape)) > 0 ? [1] : []
+    content {
+      ocpus         = 1
+      memory_in_gbs = 6
+    }
+  }
 
   create_vnic_details {
     subnet_id        = oci_core_subnet.python_subnet.id
@@ -138,4 +147,11 @@ resource "oci_core_instance" "python_instance" {
   }
 
   freeform_tags = local.common_tags
+
+  # Add lifecycle to prevent recreation on minor changes
+  lifecycle {
+    ignore_changes = [
+      source_details[0].source_id
+    ]
+  }
 }

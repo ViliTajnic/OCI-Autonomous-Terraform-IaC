@@ -74,5 +74,16 @@ output "next_steps" {
 
 output "cost_info" {
   description = "Cost information"
-  value = "This stack uses Always Free tier resources - Total cost: $0/month"
+  value = var.use_free_tier ? "This stack uses Always Free tier resources - Total cost: $0/month" : "This stack uses PAID tier resources - Check OCI billing for costs"
+}
+
+# Tier information
+output "database_tier_info" {
+  description = "Database tier information"
+  value = {
+    tier               = var.use_free_tier ? "Always Free" : "Paid"
+    cpu_cores          = local.adb_cpu_cores
+    storage_tbs        = local.adb_storage
+    auto_scaling       = var.use_free_tier ? false : var.adb_auto_scaling_enabled
+  }
 }
