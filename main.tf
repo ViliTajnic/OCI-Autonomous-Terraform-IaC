@@ -11,7 +11,7 @@ data "oci_identity_availability_domains" "ads" {
   compartment_id = var.compartment_ocid
 }
 
-# Get latest Oracle Linux image (simplified - no shape filter)
+# Get latest Oracle Linux image (no shape filter)
 data "oci_core_images" "oracle_linux" {
   compartment_id           = var.compartment_ocid
   operating_system         = "Oracle Linux"
@@ -112,21 +112,14 @@ resource "oci_database_autonomous_database" "python_adb" {
   freeform_tags = local.common_tags
 }
 
-# Create Compute Instance (simplified)
+# Create Compute Instance (VM.Standard.A2.Flex with default config)
 resource "oci_core_instance" "python_instance" {
   compartment_id      = var.compartment_ocid
   availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
   shape               = local.instance_shape
   display_name        = local.instance_name
 
-  # Instance shape configuration for flexible shapes
-  dynamic "shape_config" {
-    for_each = length(regexall("Flex", local.instance_shape)) > 0 ? [1] : []
-    content {
-      ocpus         = 1
-      memory_in_gbs = 6  # VM.Standard.A2.Flex: 1 OCPU = 6GB (as shown in OCI Console)
-    }
-  }
+  # No shape_config block - let OCI use defaults for VM.Standard.A2.Flex
 
   create_vnic_details {
     subnet_id        = oci_core_subnet.python_subnet.id
@@ -148,7 +141,7 @@ resource "oci_core_instance" "python_instance" {
 
   freeform_tags = local.common_tags
 
-  # Add lifecycle to prevent recreation on minor changes
+  # Prevent recreation on minor image changes
   lifecycle {
     ignore_changes = [
       source_details[0].source_id
