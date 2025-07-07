@@ -95,16 +95,22 @@ variables:
   preferred_shape:
     type: enum
     title: "Compute Shape Type"
-    description: "Select compute shape family (Ampere shapes support flexible CPU/memory)"
+    description: "Select compute shape family (all options support Always Free tier within 4 OCPU limit)"
     default: "ampere_a1"
     enum:
       - "ampere_a1"
-      - "intel_micro" 
       - "ampere_a2"
+      - "intel_e3_flex"
+      - "intel_e4_flex"
+      - "intel_micro"
+      - "amd_e3_flex"
     enumNames:
-      - "Ampere A1 (ARM) - Best flexibility"
-      - "Intel E2.1.Micro - Fixed 1 CPU, 1GB"
+      - "Ampere A1 (ARM) - Best Always Free option"
       - "Ampere A2 (ARM) - Regional availability"
+      - "Intel E3.Flex (x86) - Flexible Intel"
+      - "Intel E4.Flex (x86) - Latest Intel generation"
+      - "Intel E2.1.Micro (x86) - Fixed 1 CPU, 1GB"
+      - "AMD E3.Flex (x86) - AMD processors"
 
   always_free_performance_tier:
     type: enum
@@ -120,13 +126,10 @@ variables:
       - "Balanced (2 OCPU, 12GB) - Recommended"  
       - "Maximum (4 OCPU, 24GB) - Full Always Free"
     visible:
-      or:
-        - eq:
+      not:
+        eq:
           - preferred_shape
-          - "ampere_a1"
-        - eq:
-          - preferred_shape  
-          - "ampere_a2"
+          - "intel_micro"
 
 outputs:
   instance_public_ip:
