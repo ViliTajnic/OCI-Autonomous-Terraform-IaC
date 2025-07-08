@@ -1,362 +1,583 @@
-# 🐍 Simple Oracle ADB + Python Stack
+# Oracle Autonomous Database Connectivity Guide
 
-**Deploy Oracle Autonomous Database with Python in minutes using modern python-oracledb driver**
+## 🔗 Checking and Establishing Database Connectivity
 
-## ⚡ Quick Start
+### Step 1: System Update and Python Installation
 
-Choose your deployment mode:
-- **FREE**: Always Free resources ($0/month) - Perfect for development
-- **PAID**: Custom resources with auto-scaling - Perfect for production
+Start with a complete system update before installing any packages:
 
-## 🎯 What You Get
+```bash
+# SSH to your instance
+ssh opc@<instance_ip>
 
-### Always Free Tier ($0/month)
-- **Compute**: VM.Standard.E2.1.Micro (1 OCPU, 1GB RAM)
-- **Database**: Oracle ADB 23ai (1 CPU, 20GB storage)
-- **Python**: Latest python-oracledb driver pre-installed
-- **Web Access**: HTTP/HTTPS ports open for Flask apps
+# System update - Always do this first!
+sudo yum clean all
+sudo yum update -y
 
-### Paid Tier (Variable cost)
-- **Compute**: VM.Standard.E4.Flex (1-32 OCPUs, 1-512GB RAM)
-- **Database**: Oracle ADB 23ai (1-128 CPUs, 20GB-384TB storage)
-- **Auto-scaling**: Optional database auto-scaling
-- **Production**: Full production capabilities
+# Check if reboot is needed (if kernel was updated)
+needs-restarting -r
+# If output shows reboot needed: sudo reboot
 
-## 🚀 Deploy Now
+# Install EPEL repository for additional packages
+sudo yum install -y epel-release
 
-### Option 1: OCI Resource Manager (Recommended)
+# Install development tools
+sudo yum groupinstall -y "Development Tools"
+sudo yum install -y gcc openssl-devel bzip2-devel libffi-devel zlib-devel readline-devel sqlite-devel
 
-1. **Download Files**
+# Check available Python versions
+yum list available | grep python3
+
+# Install multiple Python versions (install all available)
+sudo yum install -y python3 python3-pip python3-devel
+sudo yum install -y python39 python39-pip python39-devel  # If available
+sudo yum install -y python3.11 python3.11-pip python3.11-devel  # If available
+
+# Set up alternatives for Python versions
+sudo alternatives --install /usr/bin/python3 python3 /usr/bin/python3.6 1  # Default
+sudo alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 2  # If installed
+sudo alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 3  # If installed
+
+# Set up alternatives for pip versions
+sudo alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip3.6 1  # Default
+sudo alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip3.9 2  # If installed
+sudo alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip3.11 3  # If installed
+
+# Configure which Python version to use (interactive menu)
+sudo alternatives --config python3
+# Choose your preferred Python version from the menu
+
+# Configure which pip version to use (interactive menu)
+sudo alternatives --config pip3
+# Choose the corresponding pip version
+
+# Verify selected versions
+python3 --version
+pip3 --version
+which python3
+which pip3
+
+# Update pip and PATH
+pip3 install --user --upgrade pip
+echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+
+# Install Oracle database driver
+pip3 install --user oracledb
+
+# Install additional useful packages
+pip3 install --user pandas sqlalchemy requests
+
+# Verify Oracle driver installation
+python3 -c "import oracledb; print('oracledb version:', oracledb.version)"
+```
+
+**Managing Python Versions:**
+```bash
+# Check current Python alternatives
+sudo alternatives --display python3
+
+# Switch to different Python version anytime
+sudo alternatives --config python3
+
+# Switch pip version to match Python version
+sudo alternatives --config pip3
+
+# List all installed Python versions
+ls -la /usr/bin/python*
+
+# Check specific version details
+/usr/bin/python3.9 --version
+/usr/bin/python3.11 --version
+```
+
+**Alternative: Manual Python 3.12 Installation (if needed)**
+```bash
+# If latest Python version is not available in yum, compile from source
+cd /tmp
+wget https://www.python.org/ftp/python/3.12.0/Python-3.12.0.tgz
+tar xzf Python-3.12.0.tgz
+cd Python-3.12.0
+
+# Configure and compile
+./configure --enable-optimizations
+make -j $(nproc)
+sudo make altinstall
+
+# Use Python 3.12
+python3.12 --version
+python3.12 -m pip install --user oracledb pandas sqlalchemy
+```
+
+**Check Available Python Versions:**
+```bash
+# Check what Python versions are available
+yum list available | grep python3
+
+# Install the highest available version
+sudo yum install -y python39 python39-pip python39-devel  # Example for Python 3.9
+```
+
+### Step 2: Download and Configure Wallet
+
+After your Terraform stack deployment completes:
+
+1. **Download Wallet from OCI Console**
    ```bash
-   git clone <this-repo>
-   cd simple-oracle-python-stack
+   # Go to: OCI Console → Oracle Database → Autonomous Database → PythonADB
+   # Click "DB Connection" → Download Wallet
+   # Set wallet password (remember this!) → Save as wallet.zip
    ```
 
-2. **Create Deployment Package**
+2. **Transfer Wallet to Compute Instance**
    ```bash
-   zip terraform-stack.zip main.tf variables.tf outputs.tf schema.yaml cloud-init.yaml
+   # From your local machine, upload wallet to the instance
+   scp wallet.zip opc@<instance_ip>:~/
+   
+   # SSH to your instance
+   ssh opc@<instance_ip>
+   
+   # Create wallet directory and extract
+   mkdir -p ~/wallet
+   unzip wallet.zip -d ~/wallet/
+   
+   # Verify wallet contents
+   ls -la ~/wallet/
+   # Should show: cwallet.sso, tnsnames.ora, sqlnet.ora, etc.
    ```
 
-3. **Deploy via OCI Console**
-   - Go to OCI Console → Developer Services → Resource Manager → Stacks
-   - Create Stack → Upload `terraform-stack.zip`
-   - **Required Inputs** (only 2!):
-     - SSH Public Key
-     - Admin Password (8+ characters)
-   - **Choose Mode**: Keep "Use Always Free Resources" checked for $0 deployment
-   - Apply → Deploy (takes 3-5 minutes)
+### Step 3: Verify Network Connectivity
 
-### Option 2: Terraform CLI
-
-1. **Configure Variables**
-   ```bash
-   cp terraform.tfvars.example terraform.tfvars
-   # Edit with your SSH key and password
-   ```
-
-2. **Deploy**
-   ```bash
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-
-## 📝 Configuration Examples
-
-### Free Development Environment
-```hcl
-# terraform.tfvars
-ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2E..."
-admin_password = "MySecurePass123!"
-use_free_tier = true
-```
-**Cost**: $0/month
-
-### Small Production Setup
-```hcl
-# terraform.tfvars
-ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2E..."
-admin_password = "MySecurePass123!"
-use_free_tier = false
-compute_ocpus = 2
-compute_memory_gb = 16
-adb_cpu_cores = 2
-adb_storage_gb = 1024
-enable_auto_scaling = true
-```
-**Cost**: ~$50-100/month
-
-### High-Performance Setup
-```hcl
-# terraform.tfvars
-ssh_public_key = "ssh-rsa AAAAB3NzaC1yc2E..."
-admin_password = "MySecurePass123!"
-use_free_tier = false
-compute_ocpus = 8
-compute_memory_gb = 64
-adb_cpu_cores = 8
-adb_storage_gb = 5120
-enable_auto_scaling = true
-```
-**Cost**: ~$200-500/month
-
-## 🔧 Post-Deployment Setup
-
-After deployment completes:
-
-### 1. Connect to Your Instance
 ```bash
-# Use the SSH command from outputs
-ssh opc@<instance-ip>
-```
+# Check if instance can reach Oracle services
+ping oracle.com
 
-### 2. Download Database Wallet
-- Go to OCI Console → Autonomous Database
-- Click your database → DB Connection
-- Download Wallet → Save as `wallet.zip`
+# Verify Python oracledb installation
+python3 -c "import oracledb; print('✅ oracledb version:', oracledb.version)"
 
-### 3. Upload and Extract Wallet
-```bash
-# Upload wallet to instance
-scp wallet.zip opc@<instance-ip>:
-
-# SSH to instance and extract
-ssh opc@<instance-ip>
-unzip wallet.zip -d wallet/
-```
-
-### 4. Test Connection
-```bash
-python3 test_connection.py
-```
-
-Expected output:
-```
-✅ Connected to Oracle Autonomous Database!
-📊 Query result: Hello from Oracle ADB!
-🗄️  Database: Oracle Database 23ai Enterprise Edition
-```
-
-## 🐍 Python Examples
-
-### Basic Connection
-```python
-import oracledb
-
-# Connect using python-oracledb (Thin mode - no Oracle Client needed)
-connection = oracledb.connect(
-    user="ADMIN",
-    password="your_password",
-    dsn="PYTHONDB_high",
-    config_dir="/home/opc/wallet"
-)
-
-cursor = connection.cursor()
-cursor.execute("SELECT 'Hello Oracle!' FROM dual")
-result = cursor.fetchone()
-print(result[0])
-
-cursor.close()
-connection.close()
-```
-
-### Flask Web App
-```python
-from flask import Flask
-import oracledb
-
-app = Flask(__name__)
-
-@app.route('/')
-def index():
-    connection = oracledb.connect(
-        user="ADMIN",
-        password="your_password",
-        dsn="PYTHONDB_high",
-        config_dir="/home/opc/wallet"
-    )
-    # Your app logic here
-    return "Hello from Oracle ADB!"
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-```
-
-**Access your web app**: `http://<instance-ip>:5000`
-
-## 📦 Pre-installed Scripts
-
-The deployment includes ready-to-use Python scripts:
-
-| Script | Purpose | Usage |
-|--------|---------|-------|
-| `test_connection.py` | Test database connectivity | `python3 test_connection.py` |
-| `flask_app.py` | Web application example | `python3 flask_app.py` |
-| `connection_example.py` | Basic connection template | `python3 connection_example.py` |
-
-## 🔗 Database Connection Details
-
-### Connection Strings
-- **High Performance**: `PYTHONDB_high`
-- **Balanced**: `PYTHONDB_medium`
-- **Low Cost**: `PYTHONDB_low`
-
-### Credentials
-- **User**: `ADMIN`
-- **Password**: The password you provided during deployment
-- **Wallet**: `/home/opc/wallet/`
-
-## 🛠️ Customization Options
-
-### Variables Reference
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `ssh_public_key` | SSH public key for access | - | ✅ |
-| `admin_password` | Database admin password | - | ✅ |
-| `use_free_tier` | Use Always Free resources | `true` | ❌ |
-| `project_name` | Resource name prefix | `python-oracle` | ❌ |
-| `database_name` | Database name | `PYTHONDB` | ❌ |
-
-### Paid Tier Options (when `use_free_tier = false`)
-
-| Variable | Description | Default | Range |
-|----------|-------------|---------|-------|
-| `compute_ocpus` | Compute OCPUs | `2` | 1-32 |
-| `compute_memory_gb` | Compute memory (GB) | `16` | 1-512 |
-| `adb_cpu_cores` | Database CPU cores | `2` | 1-128 |
-| `adb_storage_gb` | Database storage (GB) | `1024` | 20-393,216 |
-| `enable_auto_scaling` | Database auto-scaling | `false` | true/false |
-
-## 🔒 Security Features
-
-- **Network**: VCN with public subnet and security lists
-- **Access**: SSH key-based authentication
-- **Database**: Wallet-based mTLS encryption
-- **Firewall**: Only necessary ports open (22, 80, 443, 5000)
-
-## 📊 Cost Comparison
-
-| Deployment Mode | Monthly Cost | Use Case |
-|----------------|--------------|----------|
-| **Always Free** | $0 | Development, learning, small projects |
-| **Small Paid** | ~$50-100 | Small production apps, startups |
-| **Medium Paid** | ~$100-300 | Growing applications |
-| **Large Paid** | ~$300+ | Enterprise applications |
-
-*Costs are estimates and may vary by region and usage*
-
-## 🆘 Troubleshooting
-
-### Common Issues
-
-**Connection Failed**
-```bash
 # Check wallet files
-ls -la wallet/
-# Should show: cwallet.sso, ewallet.p12, tnsnames.ora, etc.
-
-# Verify python-oracledb installation
-python3 -c "import oracledb; print(oracledb.__version__)"
+cat ~/wallet/tnsnames.ora | head -10
 ```
 
-**SSH Access Issues**
-```bash
-# Check security groups allow SSH (port 22)
-# Verify your private key matches the public key used
-# Ensure instance has public IP assigned
-```
+### Step 4: Test Basic Database Connection
 
-**Web App Not Accessible**
-```bash
-# Check if Flask is running
-python3 flask_app.py
+Create a simple connectivity test script using the modern oracledb driver:
 
-# Test locally first
-curl http://localhost:5000
-
-# Check firewall allows port 5000
-```
-
-### Log Files
-```bash
-# Setup logs
-sudo cat /var/log/setup.log
-
-# Cloud-init logs  
-sudo cat /var/log/cloud-init.log
-
-# System logs
-sudo journalctl -u cloud-init
-```
-
-## 🔄 Migration from cx_Oracle
-
-If you're migrating from cx_Oracle to python-oracledb:
-
-### Key Changes
 ```python
-# Old (cx_Oracle)
-import cx_Oracle
-cx_Oracle.init_oracle_client()
-connection = cx_Oracle.connect("user/password@dsn")
-
-# New (python-oracledb)
+# Create file: test_basic_connection.py
 import oracledb
-connection = oracledb.connect(user="user", password="password", dsn="dsn")
+import getpass
+
+def test_connection():
+    try:
+        # Database connection parameters
+        username = "ADMIN"
+        password = getpass.getpass("Enter ADMIN password: ")
+        wallet_password = getpass.getpass("Enter wallet password: ")
+        
+        # Try different service names (high, medium, low performance)
+        service_names = ["pythonadb_high", "pythonadb_medium", "pythonadb_low"]
+        
+        for service_name in service_names:
+            try:
+                print(f"\n🔍 Testing connection to: {service_name}")
+                
+                # Create connection using wallet with password
+                connection = oracledb.connect(
+                    user=username,
+                    password=password,
+                    dsn=service_name,
+                    config_dir="/home/opc/wallet",
+                    wallet_location="/home/opc/wallet",
+                    wallet_password=wallet_password
+                )
+                
+                print(f"✅ Successfully connected to {service_name}")
+                
+                # Test basic query
+                cursor = connection.cursor()
+                cursor.execute("SELECT 'Hello from Oracle ADB on ' || TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') FROM dual")
+                result = cursor.fetchone()
+                print(f"📋 Query result: {result[0]}")
+                
+                # Get database info
+                cursor.execute("SELECT banner FROM v$version WHERE banner LIKE 'Oracle%'")
+                db_version = cursor.fetchone()
+                print(f"🗄️  Database: {db_version[0]}")
+                
+                # Show current user and database
+                cursor.execute("SELECT USER, SYS_CONTEXT('USERENV', 'DB_NAME') FROM dual")
+                user_info = cursor.fetchone()
+                print(f"👤 Connected as: {user_info[0]} to database: {user_info[1]}")
+                
+                cursor.close()
+                connection.close()
+                print(f"🔌 Connection to {service_name} closed successfully\n")
+                break
+                
+            except oracledb.DatabaseError as e:
+                print(f"❌ Failed to connect to {service_name}: {e}")
+                continue
+                
+    except Exception as e:
+        print(f"💥 Error: {e}")
+
+if __name__ == "__main__":
+    test_connection()
 ```
 
-### Benefits of python-oracledb
-- **No Oracle Client**: Thin mode works without Oracle Client libraries
-- **Better Performance**: Optimized for cloud environments
-- **Modern API**: Cleaner, more pythonic interface
-- **Active Development**: Latest features and security updates
+Run the test:
+```bash
+python3 test_basic_connection.py
+```
 
-## 📚 Resources
+### Step 5: Advanced Connection and Query Examples
 
-### Documentation
-- [python-oracledb Documentation](https://python-oracledb.readthedocs.io/)
-- [Oracle Autonomous Database](https://docs.oracle.com/en/cloud/paas/autonomous-database/)
-- [OCI Always Free](https://www.oracle.com/cloud/free/)
+#### Method 1: Connection with Host Details from TNS
 
-### Tutorials
-- [Python Database Programming](https://python-oracledb.readthedocs.io/en/latest/user_guide/index.html)
-- [Flask Web Development](https://flask.palletsprojects.com/)
-- [Oracle SQL Tutorial](https://docs.oracle.com/en/database/oracle/oracle-database/23/sqlqr/)
+```python
+# Create file: connect_with_host.py
+import oracledb
+import getpass
 
-## 🤝 Contributing
+def connect_with_host():
+    # Read tnsnames.ora to understand connection details
+    print("📄 Reading TNS Names configuration...")
+    with open('/home/opc/wallet/tnsnames.ora', 'r') as f:
+        tns_content = f.read()
+        print("First few lines of tnsnames.ora:")
+        print('\n'.join(tns_content.split('\n')[:15]))
+    
+    # Connection parameters
+    username = "ADMIN"
+    password = getpass.getpass("Enter ADMIN password: ")
+    wallet_password = getpass.getpass("Enter wallet password: ")
+    
+    try:
+        # Connect using service name with wallet
+        connection = oracledb.connect(
+            user=username,
+            password=password,
+            dsn="pythonadb_high",
+            config_dir="/home/opc/wallet",
+            wallet_location="/home/opc/wallet",
+            wallet_password=wallet_password
+        )
+        
+        print("✅ Connected successfully!")
+        
+        # Get detailed connection info
+        cursor = connection.cursor()
+        
+        # Database and instance information
+        cursor.execute("""
+            SELECT 
+                SYS_CONTEXT('USERENV', 'DB_NAME') as db_name,
+                SYS_CONTEXT('USERENV', 'INSTANCE_NAME') as instance_name,
+                SYS_CONTEXT('USERENV', 'SERVER_HOST') as server_host,
+                SYS_CONTEXT('USERENV', 'SERVICE_NAME') as service_name
+            FROM dual
+        """)
+        
+        db_info = cursor.fetchone()
+        print(f"🏷️  Database Name: {db_info[0]}")
+        print(f"🖥️  Instance Name: {db_info[1]}")
+        print(f"🌐 Server Host: {db_info[2]}")
+        print(f"⚙️  Service Name: {db_info[3]}")
+        
+        cursor.close()
+        connection.close()
+        
+    except oracledb.DatabaseError as e:
+        print(f"❌ Connection failed: {e}")
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test with both free and paid tiers
-5. Submit a pull request
+if __name__ == "__main__":
+    connect_with_host()
+```
 
-## 📄 License
+#### Method 2: Sample Queries and Operations
 
-This project is open source and available under the [MIT License](LICENSE).
+```python
+# Create file: sample_queries.py
+import oracledb
+import getpass
 
-## 🆚 Version History
+def run_sample_queries():
+    username = "ADMIN"
+    password = getpass.getpass("Enter ADMIN password: ")
+    wallet_password = getpass.getpass("Enter wallet password: ")
+    
+    try:
+        # Connect to database
+        connection = oracledb.connect(
+            user=username,
+            password=password,
+            dsn="pythonadb_high",
+            config_dir="/home/opc/wallet",
+            wallet_location="/home/opc/wallet",
+            wallet_password=wallet_password
+        )
+        
+        cursor = connection.cursor()
+        print("🚀 Running sample queries...\n")
+        
+        # 1. Create a sample table
+        print("1️⃣ Creating sample table...")
+        try:
+            cursor.execute("DROP TABLE sample_employees")
+        except:
+            pass  # Table might not exist
+            
+        cursor.execute("""
+            CREATE TABLE sample_employees (
+                id NUMBER GENERATED BY DEFAULT AS IDENTITY,
+                name VARCHAR2(100),
+                department VARCHAR2(50),
+                salary NUMBER(10,2),
+                hire_date DATE
+            )
+        """)
+        print("✅ Table created successfully")
+        
+        # 2. Insert sample data
+        print("\n2️⃣ Inserting sample data...")
+        sample_data = [
+            ('John Doe', 'Engineering', 75000.00, '2023-01-15'),
+            ('Jane Smith', 'Marketing', 65000.00, '2023-02-20'),
+            ('Bob Johnson', 'Sales', 55000.00, '2023-03-10'),
+            ('Alice Brown', 'Engineering', 80000.00, '2023-01-25')
+        ]
+        
+        for emp in sample_data:
+            cursor.execute("""
+                INSERT INTO sample_employees (name, department, salary, hire_date) 
+                VALUES (:1, :2, :3, TO_DATE(:4, 'YYYY-MM-DD'))
+            """, emp)
+        
+        connection.commit()
+        print(f"✅ Inserted {len(sample_data)} records")
+        
+        # 3. Query data
+        print("\n3️⃣ Querying data...")
+        cursor.execute("""
+            SELECT id, name, department, salary, 
+                   TO_CHAR(hire_date, 'YYYY-MM-DD') as hire_date
+            FROM sample_employees 
+            ORDER BY salary DESC
+        """)
+        
+        print("📊 Employee Data:")
+        print(f"{'ID':<3} {'Name':<15} {'Department':<12} {'Salary':<10} {'Hire Date':<12}")
+        print("-" * 55)
+        
+        for row in cursor.fetchall():
+            print(f"{row[0]:<3} {row[1]:<15} {row[2]:<12} ${row[3]:<9,.2f} {row[4]:<12}")
+        
+        # 4. Aggregate queries
+        print("\n4️⃣ Running aggregate queries...")
+        
+        # Average salary by department
+        cursor.execute("""
+            SELECT department, 
+                   COUNT(*) as emp_count,
+                   AVG(salary) as avg_salary,
+                   MAX(salary) as max_salary
+            FROM sample_employees 
+            GROUP BY department
+            ORDER BY avg_salary DESC
+        """)
+        
+        print("\n📈 Department Statistics:")
+        print(f"{'Department':<12} {'Count':<6} {'Avg Salary':<12} {'Max Salary':<12}")
+        print("-" * 45)
+        
+        for row in cursor.fetchall():
+            print(f"{row[0]:<12} {row[1]:<6} ${row[2]:<11,.2f} ${row[3]:<11,.2f}")
+        
+        # 5. Database metadata
+        print("\n5️⃣ Database metadata...")
+        cursor.execute("""
+            SELECT table_name, num_rows, last_analyzed 
+            FROM user_tables 
+            WHERE table_name = 'SAMPLE_EMPLOYEES'
+        """)
+        
+        metadata = cursor.fetchone()
+        if metadata:
+            print(f"📋 Table: {metadata[0]}")
+            print(f"📊 Rows: {metadata[1] or 'Not analyzed'}")
+            print(f"📅 Last analyzed: {metadata[2] or 'Never'}")
+        
+        # 6. Clean up (optional)
+        print("\n6️⃣ Cleaning up...")
+        cursor.execute("DROP TABLE sample_employees")
+        print("✅ Sample table dropped")
+        
+        cursor.close()
+        connection.close()
+        print("\n🎉 All operations completed successfully!")
+        
+    except oracledb.DatabaseError as e:
+        print(f"❌ Database error: {e}")
+    except Exception as e:
+        print(f"💥 Error: {e}")
 
-- **v1.0**: Simple stack with FREE/PAID toggle
-- **v1.1**: Added Flask web app example
-- **v1.2**: Enhanced documentation and troubleshooting
+if __name__ == "__main__":
+    run_sample_queries()
+```
 
----
+### Step 6: Connection Troubleshooting
 
-## 🎯 Quick Summary
+```python
+# Create file: troubleshoot_connection.py
+import oracledb
+import os
+import getpass
 
-**Perfect for**:
-- 🎓 Learning Oracle Database with Python
-- 🚀 Rapid prototyping and development
-- 💼 Small to medium production applications
-- 🔬 Data analysis and visualization projects
+def troubleshoot_connection():
+    print("🔧 Oracle Database Connection Troubleshooting\n")
+    
+    # 1. Check wallet files
+    print("1️⃣ Checking wallet files...")
+    wallet_dir = "/home/opc/wallet"
+    required_files = ['cwallet.sso', 'tnsnames.ora', 'sqlnet.ora']
+    
+    for file in required_files:
+        file_path = os.path.join(wallet_dir, file)
+        if os.path.exists(file_path):
+            print(f"✅ {file} exists")
+        else:
+            print(f"❌ {file} missing!")
+    
+    # 2. Check Python oracledb
+    print("\n2️⃣ Checking oracledb installation...")
+    try:
+        print(f"✅ oracledb version: {oracledb.version}")
+        print(f"✅ Client version: {oracledb.clientversion()}")
+    except Exception as e:
+        print(f"❌ oracledb error: {e}")
+    
+    # 3. Test connection with detailed error handling
+    print("\n3️⃣ Testing connection with detailed diagnostics...")
+    
+    username = "ADMIN"
+    password = getpass.getpass("Enter ADMIN password (or press Enter to skip): ")
+    
+    if password:
+        wallet_password = getpass.getpass("Enter wallet password: ")
+        service_names = ["pythonadb_high", "pythonadb_medium", "pythonadb_low"]
+        
+        for service_name in service_names:
+            try:
+                print(f"\n🔍 Testing {service_name}...")
+                connection = oracledb.connect(
+                    user=username,
+                    password=password,
+                    dsn=service_name,
+                    config_dir=wallet_dir,
+                    wallet_location=wallet_dir,
+                    wallet_password=wallet_password
+                )
+                
+                cursor = connection.cursor()
+                cursor.execute("SELECT 1 FROM dual")
+                result = cursor.fetchone()
+                
+                if result and result[0] == 1:
+                    print(f"✅ {service_name}: Connection successful!")
+                
+                cursor.close()
+                connection.close()
+                
+            except oracledb.DatabaseError as e:
+                error_code = e.args[0].code if hasattr(e.args[0], 'code') else 'Unknown'
+                print(f"❌ {service_name}: Failed (Error {error_code})")
+                print(f"   Details: {str(e)[:100]}...")
+    
+    # 4. Check TNS configuration
+    print("\n4️⃣ Checking TNS configuration...")
+    try:
+        with open(os.path.join(wallet_dir, 'tnsnames.ora'), 'r') as f:
+            content = f.read()
+            services = [line.split('=')[0].strip() for line in content.split('\n') 
+                       if '=' in line and not line.strip().startswith('#')]
+            print(f"✅ Found {len(services)} service definitions:")
+            for service in services[:5]:  # Show first 5
+                print(f"   - {service}")
+    except Exception as e:
+        print(f"❌ Cannot read tnsnames.ora: {e}")
 
-**Key Features**:
-- ✅ **2-minute setup** with minimal configuration
-- ✅ **$0 cost option** with Always Free resources
-- ✅ **Modern python-oracledb** driver
-- ✅ **Production ready** scaling options
-- ✅ **Pre-built examples** and documentation
+if __name__ == "__main__":
+    troubleshoot_connection()
+```
 
-**Get started now**: Download, configure 2 variables, deploy, and start coding with Oracle Database in Python! 🚀
+Run these scripts:
+```bash
+# Test basic connectivity
+python3 test_basic_connection.py
+
+# Get detailed connection info
+python3 connect_with_host.py
+
+# Run sample queries and operations
+python3 sample_queries.py
+
+# Troubleshoot connection issues
+python3 troubleshoot_connection.py
+```
+
+### Step 7: Quick Connection Test
+
+For a fast connectivity check, create this simple script:
+
+```python
+# Create file: quick_test.py
+import oracledb
+import getpass
+
+try:
+    # Quick connection test
+    admin_password = getpass.getpass("Enter ADMIN password: ")
+    wallet_password = getpass.getpass("Enter wallet password: ")
+    
+    conn = oracledb.connect(
+        user="ADMIN",
+        password=admin_password,
+        dsn="pythonadb_high",
+        config_dir="/home/opc/wallet",
+        wallet_location="/home/opc/wallet",
+        wallet_password=wallet_password
+    )
+    
+    cursor = conn.cursor()
+    cursor.execute("SELECT 'Connection successful at ' || TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS') FROM dual")
+    print("✅", cursor.fetchone()[0])
+    
+    cursor.close()
+    conn.close()
+    
+except Exception as e:
+    print("❌ Connection failed:", e)
+```
+
+```bash
+python3 quick_test.py
+```
+
+## 🎯 Expected Results
+
+When everything is working correctly, you should see:
+- ✅ Successful connection to ADB
+- ✅ Query results returned
+- ✅ Database version information
+- ✅ No authentication or network errors
+
+## Common Issues and Solutions
+
+| Issue | Solution |
+|-------|----------|
+| `TNS:could not resolve the connect identifier` | Check wallet files and service names |
+| `Invalid username/password` | Verify ADMIN password |
+| `Network adapter could not establish connection` | Check network connectivity and firewall |
+| `Wallet not found` | Verify wallet path and permissions |
+| `Module not found: oracledb` | Run `pip3 install oracledb` |

@@ -1,0 +1,28 @@
+# Oracle Autonomous Database Python Dependencies
+# Install with: pip3 install --user -r requirements.txt
+
+# Oracle Database Driver (replaces cx_Oracle)
+oracledb>=1.4.0
+
+# Data manipulation and analysis
+pandas>=1.5.0
+
+# SQL toolkit and Object Relational Mapping
+sqlalchemy>=2.0.0
+
+# HTTP library for API calls (useful for OCI REST APIs)
+requests>=2.28.0
+
+# Enhanced input handling (for secure password input)
+# Note: getpass is part of Python standard library, no need to install
+
+# Optional: Jupyter notebook support (uncomment if needed)
+# jupyter>=1.0.0
+# notebook>=6.4.0
+
+# Optional: Data visualization (uncomment if needed)
+# matplotlib>=3.5.0
+# seaborn>=0.11.0
+
+# Optional: Oracle Cloud Infrastructure SDK (uncomment if needed)
+# oci>=2.100.0
