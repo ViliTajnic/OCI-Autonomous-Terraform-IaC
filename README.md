@@ -1,5 +1,7 @@
 # Oracle Autonomous Database Connectivity Guide
 
+##  [![One Click deploy to OCI](image.png)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/ViliTajnic/OCI-Autonomous-Terraform-IaC/blob/main/tf_adb_iac.zip)
+
 ## 🔗 Checking and Establishing Database Connectivity
 
 ### Step 1: System Update and Python Installation
