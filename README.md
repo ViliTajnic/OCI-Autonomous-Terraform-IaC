@@ -1,6 +1,6 @@
 # Oracle Autonomous Database Connectivity Guide
 
-##  [![One Click deploy to OCI](image.png)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/ViliTajnic/OCI-Autonomous-Terraform-IaC/releases/download/1.0/tf_adb_iac.zip)
+## One Click Deployment here ->  [![One Click deployment to OCI](image.png)](https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/ViliTajnic/OCI-Autonomous-Terraform-IaC/releases/download/1.0/tf_adb_iac.zip)
 
 ## 🔗 Checking and Establishing Database Connectivity
 
